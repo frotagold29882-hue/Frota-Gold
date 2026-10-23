@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel da Frota</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%232a78d6'/%3E%3Cpath d='M5 15V9h8v6M13 11h3l3 3v1h-6' fill='none' stroke='white' stroke-width='1.8' stroke-linejoin='round'/%3E%3Ccircle cx='8' cy='16' r='1.6' fill='white'/%3E%3Ccircle cx='16' cy='16' r='1.6' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<header class="topo">
+  <div class="topo-in">
+    <div class="marca">
+      <div class="marca-icone"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M2 16V7h11v9M13 10h4l4 4v2h-8"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg></div>
+      Painel da Frota
+    </div>
+    <nav class="abas" id="abas">
+      <button class="aba ativa" data-tela="painel">Painel</button>
+      <button class="aba" data-tela="importar">Importar</button>
+      <button class="aba" data-tela="dados">Dados</button>
+      <button class="aba" data-tela="ajustes">Ajustes</button>
+    </nav>
+    <div class="topo-dir">
+      <span class="selo" id="seloGit" title="Situação do salvamento"><span class="ponto"></span><span>Verificando…</span></span>
+      <button class="icone-btn" id="btnTema" title="Alternar tema claro/escuro" aria-label="Alternar tema">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="aviso" id="avisoServidor">
+    <b>O painel está aberto sem o servidor.</b> Os dados aparecem a partir da última cópia do navegador, mas <b>nada será gravado</b>.
+    Feche esta aba e abra pelo arquivo <code>Abrir Painel.bat</code>.
+  </div>
+
+  <!-- ================= PAINEL ================= -->
+  <section class="tela ativa" id="tela-painel">
+    <div class="filtros">
+      <div class="seg" id="segPeriodo">
+        <button data-p="7">7 dias</button>
+        <button data-p="30" class="ativo">30 dias</button>
+        <button data-p="mes">Este mês</button>
+        <button data-p="ano">Este ano</button>
+        <button data-p="tudo">Tudo</button>
+        <button data-p="livre">Datas</button>
+      </div>
+      <span class="campo" id="campoDatas" hidden>
+        <input type="date" id="fDe" aria-label="De"> até <input type="date" id="fAte" aria-label="Até">
+      </span>
+      <label class="campo">Unidade <select id="fUnidade"><option value="">Todas</option></select></label>
+      <label class="campo">Estado <select id="fUF"><option value="">Todos</option></select></label>
+      <button class="btn peq" id="btnLimpar" hidden>Limpar filtros</button>
+      <span class="periodo-txt" id="periodoTxt"></span>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grade g3">
+      <div class="cartao"><h3>Para onde vai o dinheiro</h3><p class="sub">Diesel, Arla e multas no período</p><div id="rCompos"></div></div>
+      <div class="cartao"><h3>Custo por unidade</h3><p class="sub">Diesel + Arla + multas</p><div id="rUnidade"></div></div>
+      <div class="cartao"><h3>Diesel por estado</h3><p class="sub">Onde mais abastecemos (R$)</p><div id="rEstado"></div></div>
+    </div>
+
+    <div class="grade g3">
+      <div class="cartao"><h3>Curva ABC dos veículos</h3><p class="sub">Classe A = veículos que somam 80% do diesel</p><div id="rABC"></div></div>
+      <div class="cartao"><h3>Multas por unidade</h3><p class="sub" id="subMultas">Valor cheio, pela data da infração</p><div id="rMultas"></div></div>
+      <div class="cartao"><h3>Eficiência da frota</h3><p class="sub">Abastecimentos de diesel com km válido</p><div id="rEfic"></div></div>
+    </div>
+
+    <div class="grade">
+      <div class="cartao">
+        <div class="cartao-cab"><div><h3>Ranking por unidade</h3><p class="sub">Clique numa unidade para filtrar o painel. Verde = melhor que a média da frota.</p></div></div>
+        <div class="tabela-wrap"><table id="tabUnidades"></table></div>
+      </div>
+    </div>
+
+    <div class="grade g21">
+      <div class="cartao"><h3 id="tituloEvol">Evolução semanal</h3><p class="sub">Custo por semana (R$)</p><div class="graf-box"><canvas id="gEvol"></canvas></div></div>
+      <div class="cartao"><h3>Pontos de atenção</h3><p class="sub">Clique para ver e corrigir</p><div class="atencao" id="atencao"></div></div>
+    </div>
+
+    <div class="grade">
+      <div class="cartao">
+        <h3>Veículos que mais custam</h3><p class="sub">Top 15 pela curva ABC do diesel no período</p>
+        <div class="tabela-wrap"><table id="tabPlacas"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= IMPORTAR ================= -->
+  <section class="tela" id="tela-importar">
+    <label class="solta" id="solta">
+      <input type="file" id="arquivos" accept=".xlsx,.xls,.csv" multiple hidden>
+      <div class="solta-icone"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></div>
+      <h2>Arraste as planilhas aqui</h2>
+      <p>ou clique para escolher · abastecimentos, multas e cadastro da frota (o tipo é reconhecido sozinho)</p>
+    </label>
+    <div class="resultado" id="resultado"></div>
+
+    <div class="passos">
+      <div class="passo"><b><i>1</i>Cópia original</b><span>A planilha é guardada como veio em <code>dados/importacoes</code>.</span></div>
+      <div class="passo"><b><i>2</i>Junta, não apaga</b><span>Só entram registros novos ou corrigidos. O histórico antigo continua.</span></div>
+      <div class="passo"><b><i>3</i>Commit no git</b><span>Cada gravação vira uma versão. Dá para voltar a qualquer data.</span></div>
+      <div class="passo"><b><i>4</i>Envio ao GitHub</b><span>Se o GitHub estiver configurado, a cópia sai do computador.</span></div>
+    </div>
+
+    <div class="grade g2">
+      <div class="cartao"><h3>O que está guardado</h3><p class="sub">Base consolidada em <code>dados/base.json</code></p><div id="resumoBase"></div></div>
+      <div class="cartao"><h3>Histórico de importações</h3><p class="sub">Mais recentes primeiro</p><div class="tabela-wrap"><table id="tabImport"></table></div></div>
+    </div>
+  </section>
+
+  <!-- ================= DADOS ================= -->
+  <section class="tela" id="tela-dados">
+    <div class="sub-abas" id="subDados">
+      <button data-d="abastecimentos" class="ativo">Abastecimentos</button>
+      <button data-d="multas">Multas</button>
+      <button data-d="frota">Frota</button>
+      <button data-d="abc">Curva ABC por placa</button>
+    </div>
+    <div class="barra-dados">
+      <label class="campo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="busca" placeholder="Buscar placa, motorista, posto, unidade…"></label>
+      <span class="contador" id="contador"></span>
+      <button class="btn peq" id="btnCSV">Exportar para Excel (CSV)</button>
+    </div>
+    <p class="contador" style="margin:-4px 0 10px">Respeita os filtros de período, unidade e estado do Painel.</p>
+    <div class="cartao"><div class="tabela-wrap"><table id="tabDados"></table></div></div>
+  </section>
+
+  <!-- ================= AJUSTES ================= -->
+  <section class="tela" id="tela-ajustes">
+    <div class="grade g2">
+      <div class="cartao">
+        <h3>Km máximo por abastecimento</h3>
+        <p class="sub">Acima disso (ou zero) o hodômetro é tratado como erro e fica fora do R$/km e do km/L.</p>
+        <div class="form-linha"><input type="number" id="ajKm" min="100" step="100" style="width:130px"> km <button class="btn prim peq" id="ajKmSalvar">Salvar</button></div>
+      </div>
+      <div class="cartao">
+        <h3>Backup</h3>
+        <p class="sub">Os dados já ficam no git. Use isto para levar uma cópia para outro lugar.</p>
+        <div class="form-linha"><button class="btn peq" id="btnBackup">Baixar cópia (JSON)</button></div>
+      </div>
+      <div class="cartao">
+        <h3>Unidade por placa</h3>
+        <p class="sub">Vale para multas e para abastecimentos sem a coluna Operacao. Tem prioridade sobre o cadastro da frota.</p>
+        <div class="form-linha"><input id="ajPlaca" placeholder="Placa" style="width:120px"><input id="ajUnidade" placeholder="Unidade" list="listaUnidades" style="width:180px"><button class="btn prim peq" id="ajPlacaAdd">Adicionar</button></div>
+        <datalist id="listaUnidades"></datalist>
+        <div class="lista-aj" id="listaPlacas"></div>
+      </div>
+      <div class="cartao">
+        <h3>Local da multa → estado</h3>
+        <p class="sub">Se o LOCAL da multa contiver este texto, a multa vai para o estado escolhido.</p>
+        <div class="form-linha"><input id="ajLocal" placeholder="Trecho do local (ex.: BR 316)" style="width:220px"><select id="ajLocalUF"></select><button class="btn prim peq" id="ajLocalAdd">Adicionar</button></div>
+        <div class="lista-aj" id="listaLocais"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="assets/data.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

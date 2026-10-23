@@ -1,0 +1,13 @@
+# Cópias de segurança locais do servidor (o histórico do git já guarda tudo)
+dados/.backups/
+*.tmp
+
+# Planilhas soltas na raiz não entram por engano.
+# As importadas pelo painel ficam em dados/importacoes/ e ENTRAM no git.
+/*.xlsx
+/*.xls
+/*.csv
+
+Thumbs.db
+desktop.ini
+.claude/
