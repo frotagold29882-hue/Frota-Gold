@@ -45,20 +45,29 @@ git show <codigo-do-commit>:dados/base.json > base-recuperada.json
 
 ## O que o painel mostra
 
+O painel funciona como um Power BI:
+
+- **Seleção cruzada:** clicar numa fatia, barra, linha de tabela ou motorista filtra **todos** os outros gráficos. O gráfico de onde veio o clique destaca o item escolhido e apaga os demais.
+- **Ctrl + clique** seleciona vários itens. Clicar de novo no mesmo item desfaz. **Esc** limpa tudo.
+- **Filtros laterais (segmentações):** período, tipo de custo, unidade, estado, classe ABC, placa e motorista, com busca. No celular, eles abrem pelo botão "Filtros".
+- **Detalhamento:** clicar num veículo ou motorista mostra os lançamentos por trás dos números, na tabela "Detalhe dos lançamentos". A aba Dados também respeita as seleções e exporta para Excel.
+
+Visuais:
+
 - **Indicadores:**
   - custo total, diesel, multas, R$/km, km/L e preço do litro;
   - setas comparando com o período anterior, quando há dados para comparar.
 - **Gráficos de rosca:**
   - para onde vai o dinheiro;
   - custo por unidade;
-  - diesel por estado;
+  - combustível por estado;
   - curva ABC dos veículos;
   - multas por unidade;
   - qualidade do hodômetro.
-
-  Clicar numa unidade ou num estado filtra o painel.
 - **Ranking por unidade:** em verde, o que está melhor que a média da frota; em vermelho, o que está pior.
-- **Evolução semanal:** vira mensal acima de 26 semanas.
+- **Evolução semanal:** vira mensal acima de 26 semanas. Clicar numa barra filtra aquela semana.
+- **Motoristas que mais gastam:** combustível + multas, top 10.
+- **Veículos:** lista completa pela curva ABC.
 - **Pontos de atenção**, com correção ali mesmo: placas sem unidade, multas sem estado, hodômetro inválido e diesel caro.
 - **Dados:** tabelas com busca e exportação para Excel (CSV).
 

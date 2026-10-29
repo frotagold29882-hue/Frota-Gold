@@ -39,54 +39,83 @@
 
   <!-- ================= PAINEL ================= -->
   <section class="tela ativa" id="tela-painel">
-    <div class="filtros">
-      <div class="seg" id="segPeriodo">
-        <button data-p="7">7 dias</button>
-        <button data-p="30" class="ativo">30 dias</button>
-        <button data-p="mes">Este mês</button>
-        <button data-p="ano">Este ano</button>
-        <button data-p="tudo">Tudo</button>
-        <button data-p="livre">Datas</button>
-      </div>
-      <span class="campo" id="campoDatas" hidden>
-        <input type="date" id="fDe" aria-label="De"> até <input type="date" id="fAte" aria-label="Até">
-      </span>
-      <label class="campo">Unidade <select id="fUnidade"><option value="">Todas</option></select></label>
-      <label class="campo">Estado <select id="fUF"><option value="">Todos</option></select></label>
-      <button class="btn peq" id="btnLimpar" hidden>Limpar filtros</button>
-      <span class="periodo-txt" id="periodoTxt"></span>
-    </div>
+    <div class="painel-layout">
+      <aside class="filtros-lado" id="filtrosLado" aria-label="Filtros">
+        <div class="fl-cab">
+          <b>Filtros</b>
+          <button class="btn peq" id="btnLimparTudo" hidden>Limpar tudo</button>
+          <button class="x fl-fechar" id="btnFecharFiltros" aria-label="Fechar filtros">×</button>
+        </div>
+        <div class="fl-bloco">
+          <h4>Período</h4>
+          <div class="seg seg-grade" id="segPeriodo">
+            <button data-p="7">7 dias</button>
+            <button data-p="30" class="ativo">30 dias</button>
+            <button data-p="mes">Este mês</button>
+            <button data-p="ano">Este ano</button>
+            <button data-p="tudo">Tudo</button>
+            <button data-p="livre">Datas</button>
+          </div>
+          <div class="fl-datas" id="campoDatas" hidden>
+            <input type="date" id="fDe" aria-label="De"><input type="date" id="fAte" aria-label="Até">
+          </div>
+        </div>
+        <div id="slicers"></div>
+      </aside>
 
-    <div class="kpis" id="kpis"></div>
+      <div class="painel-corpo">
+        <div class="barra-sel">
+          <button class="btn peq btn-filtros" id="btnAbrirFiltros">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>Filtros
+          </button>
+          <div class="chips" id="chips"></div>
+          <span class="periodo-txt" id="periodoTxt"></span>
+        </div>
+        <p class="dica">Clique numa fatia, barra ou linha para filtrar o painel inteiro. <b>Ctrl + clique</b> seleciona vários. <b>Esc</b> limpa tudo.</p>
 
-    <div class="grade g3">
-      <div class="cartao"><h3>Para onde vai o dinheiro</h3><p class="sub">Diesel, Arla e multas no período</p><div id="rCompos"></div></div>
-      <div class="cartao"><h3>Custo por unidade</h3><p class="sub">Diesel + Arla + multas</p><div id="rUnidade"></div></div>
-      <div class="cartao"><h3>Diesel por estado</h3><p class="sub">Onde mais abastecemos (R$)</p><div id="rEstado"></div></div>
-    </div>
+        <div class="kpis" id="kpis"></div>
 
-    <div class="grade g3">
-      <div class="cartao"><h3>Curva ABC dos veículos</h3><p class="sub">Classe A = veículos que somam 80% do diesel</p><div id="rABC"></div></div>
-      <div class="cartao"><h3>Multas por unidade</h3><p class="sub" id="subMultas">Valor cheio, pela data da infração</p><div id="rMultas"></div></div>
-      <div class="cartao"><h3>Eficiência da frota</h3><p class="sub">Abastecimentos de diesel com km válido</p><div id="rEfic"></div></div>
-    </div>
+        <div class="grade g3">
+          <div class="cartao visual" data-dim="custo"><h3>Para onde vai o dinheiro</h3><p class="sub">Tipo de custo</p><div id="rCompos"></div></div>
+          <div class="cartao visual" data-dim="unidade"><h3>Custo por unidade</h3><p class="sub">Diesel + Arla + multas</p><div id="rUnidade"></div></div>
+          <div class="cartao visual" data-dim="uf"><h3>Combustível por estado</h3><p class="sub">Onde mais abastecemos (R$)</p><div id="rEstado"></div></div>
+        </div>
 
-    <div class="grade">
-      <div class="cartao">
-        <div class="cartao-cab"><div><h3>Ranking por unidade</h3><p class="sub">Clique numa unidade para filtrar o painel. Verde = melhor que a média da frota.</p></div></div>
-        <div class="tabela-wrap"><table id="tabUnidades"></table></div>
-      </div>
-    </div>
+        <div class="grade g3">
+          <div class="cartao visual" data-dim="classe"><h3>Curva ABC dos veículos</h3><p class="sub">Classe A = veículos que somam 80% do diesel</p><div id="rABC"></div></div>
+          <div class="cartao visual" data-dim="unidade"><h3>Multas por unidade</h3><p class="sub" id="subMultas">Valor cheio, pela data da infração</p><div id="rMultas"></div></div>
+          <div class="cartao"><h3>Eficiência da frota</h3><p class="sub">Abastecimentos de diesel com km válido</p><div id="rEfic"></div></div>
+        </div>
 
-    <div class="grade g21">
-      <div class="cartao"><h3 id="tituloEvol">Evolução semanal</h3><p class="sub">Custo por semana (R$)</p><div class="graf-box"><canvas id="gEvol"></canvas></div></div>
-      <div class="cartao"><h3>Pontos de atenção</h3><p class="sub">Clique para ver e corrigir</p><div class="atencao" id="atencao"></div></div>
-    </div>
+        <div class="grade g21">
+          <div class="cartao visual" data-dim="periodo"><h3 id="tituloEvol">Evolução semanal</h3><p class="sub">Clique numa barra para ver só aquela semana</p><div class="graf-box"><canvas id="gEvol"></canvas></div></div>
+          <div class="cartao visual" data-dim="motorista"><h3>Motoristas que mais gastam</h3><p class="sub">Combustível + multas (top 10)</p><div class="barras" id="barMotoristas"></div></div>
+        </div>
 
-    <div class="grade">
-      <div class="cartao">
-        <h3>Veículos que mais custam</h3><p class="sub">Top 15 pela curva ABC do diesel no período</p>
-        <div class="tabela-wrap"><table id="tabPlacas"></table></div>
+        <div class="grade">
+          <div class="cartao visual" data-dim="unidade">
+            <h3>Ranking por unidade</h3><p class="sub">Verde = melhor que a média da frota. Clique no título da coluna para ordenar.</p>
+            <div class="tabela-wrap"><table id="tabUnidades"></table></div>
+          </div>
+        </div>
+
+        <div class="grade g21">
+          <div class="cartao visual" data-dim="placa">
+            <h3>Veículos</h3><p class="sub">Pela curva ABC do diesel. Clique para ver os lançamentos do veículo.</p>
+            <div class="tabela-wrap tabela-alta"><table id="tabPlacas"></table></div>
+          </div>
+          <div class="cartao"><h3>Pontos de atenção</h3><p class="sub">Clique para ver e corrigir</p><div class="atencao" id="atencao"></div></div>
+        </div>
+
+        <div class="grade">
+          <div class="cartao" id="cartaoLanc">
+            <div class="cartao-cab">
+              <div><h3>Detalhe dos lançamentos</h3><p class="sub" id="subLanc">Tudo o que está por trás dos números acima</p></div>
+              <div class="sub-abas" id="abasLanc"><button data-l="ab" class="ativo">Abastecimentos</button><button data-l="mu">Multas</button></div>
+            </div>
+            <div class="tabela-wrap tabela-alta"><table id="tabLanc"></table></div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -127,7 +156,7 @@
       <span class="contador" id="contador"></span>
       <button class="btn peq" id="btnCSV">Exportar para Excel (CSV)</button>
     </div>
-    <p class="contador" style="margin:-4px 0 10px">Respeita os filtros de período, unidade e estado do Painel.</p>
+    <p class="contador" style="margin:-4px 0 10px">Respeita todos os filtros e seleções do Painel.</p>
     <div class="cartao"><div class="tabela-wrap"><table id="tabDados"></table></div></div>
   </section>
 

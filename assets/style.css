@@ -58,7 +58,7 @@ button, input, select { font: inherit; color: inherit; }
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
-.topo-in { max-width: 1320px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.topo-in { max-width: 1560px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .marca { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; letter-spacing: -.01em; }
 .marca-icone { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); display: grid; place-items: center; color: #fff; }
 .abas { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 11px; }
@@ -73,7 +73,7 @@ button, input, select { font: inherit; color: inherit; }
 .selo.erro .ponto { background: var(--critical); }
 .icone-btn { border: 1px solid var(--border); background: var(--surface); border-radius: 9px; width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer; color: var(--text-2); }
 
-main { max-width: 1320px; margin: 0 auto; padding: 20px; }
+main { max-width: 1560px; margin: 0 auto; padding: 20px; }
 .tela { display: none; }
 .tela.ativa { display: block; }
 
@@ -233,4 +233,76 @@ tbody tr:hover .mini-anel::after { background: var(--surface-2); }
   .rosca { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 12px; }
   .rosca-graf { width: 150px; height: 150px; }
   .legenda { width: 100%; }
+}
+
+/* ================= modo "Power BI": filtros laterais e seleção cruzada ================= */
+.painel-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }
+.filtros-lado {
+  position: sticky; top: 72px; max-height: calc(100vh - 88px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; box-shadow: var(--shadow);
+}
+.fl-cab { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.fl-cab b { flex: 1; font-size: 15px; }
+.fl-fechar { display: none; }
+.fl-bloco { border-top: 1px solid var(--border); padding: 12px 0 4px; }
+.fl-bloco:first-of-type { border-top: 0; padding-top: 0; }
+.fl-bloco h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+.fl-bloco h4 .qtd { background: var(--accent); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 11px; letter-spacing: 0; }
+.fl-bloco h4 .limpa { margin-left: auto; border: 0; background: none; color: var(--accent); cursor: pointer; font-size: 11.5px; text-transform: none; letter-spacing: 0; padding: 0; }
+.seg-grade { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+.seg-grade button { padding: 6px 4px; }
+.fl-datas { display: grid; gap: 6px; margin-top: 8px; }
+.fl-datas input, .fl-busca { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 6px 8px; width: 100%; }
+.fl-busca { margin-bottom: 6px; font-size: 12.5px; }
+.fl-lista { display: grid; gap: 1px; max-height: 190px; overflow-y: auto; }
+.fl-op { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 7px; align-items: center; padding: 4px 6px; border-radius: 7px; cursor: pointer; font-size: 12.5px; }
+.fl-op:hover { background: var(--surface-2); }
+.fl-op input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+.fl-op span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-op small { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.fl-op.vazio-op { opacity: .45; }
+.fl-mais { border: 0; background: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 4px 6px; }
+
+.barra-sel { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; min-height: 34px; }
+.btn-filtros { display: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-sel { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 999px; padding: 3px 4px 3px 10px; font-size: 12.5px; }
+.chip-sel i { font-style: normal; color: var(--text-2); }
+.chip-sel button { border: 0; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); width: 20px; height: 20px; border-radius: 50%; cursor: pointer; line-height: 1; }
+.dica { margin: 0 0 14px; color: var(--text-3); font-size: 12.5px; }
+
+/* visual com seleção ativa: a borda avisa de onde vem o filtro */
+.cartao.visual.com-sel { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
+.legenda li.apagado { opacity: .38; }
+.legenda li.marcado .nome { font-weight: 650; }
+tbody tr.apagado { opacity: .4; }
+tbody tr.marcado { background: var(--accent-soft); }
+tbody tr.marcado td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.tabela-alta { max-height: 420px; overflow-y: auto; }
+.tabela-alta thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+
+/* barras horizontais (motoristas) */
+.barras { display: grid; gap: 6px; }
+.barra { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto; gap: 10px; align-items: center; cursor: pointer; padding: 3px 6px; border-radius: 7px; font-size: 12.5px; }
+.barra:hover { background: var(--surface-2); }
+.barra .nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barra .trilho { height: 12px; display: flex; gap: 2px; }
+.barra .trilho span { height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; }
+.barra .trilho span + span { border-radius: 0 4px 4px 0; }
+.barra .val { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.barra.apagado { opacity: .38; }
+.barra.marcado .nome { font-weight: 650; }
+.barras-leg { display: flex; gap: 14px; font-size: 12px; color: var(--text-2); margin-bottom: 8px; }
+.barras-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+@media (max-width: 1100px) {
+  .painel-layout { grid-template-columns: minmax(0, 1fr); }
+  .btn-filtros { display: inline-flex; }
+  .filtros-lado {
+    position: fixed; top: 0; left: 0; bottom: 0; width: min(300px, 86vw); max-height: none; z-index: 40;
+    border-radius: 0 var(--radius) var(--radius) 0; transform: translateX(-105%); transition: transform .2s;
+  }
+  .filtros-lado.aberto { transform: none; box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); }
+  .fl-fechar { display: block; }
 }
