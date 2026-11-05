@@ -26,6 +26,13 @@
 
   const SEM_UNIDADE = 'SEM UNIDADE';
 
+  // Onde fica cada unidade no mapa (lat, lon). Unidades novas são posicionadas em Ajustes.
+  const LOCAL_UNIDADES = {
+    'LONDRINA': { lat: -23.31, lon: -51.16 }, 'MONTES CLAROS': { lat: -16.73, lon: -43.86 }, 'BELEM': { lat: -1.46, lon: -48.49 },
+    'CAXIAS DO SUL': { lat: -29.17, lon: -51.18 }, 'DIADEMA': { lat: -23.69, lon: -46.62 }, 'CUIABA': { lat: -15.60, lon: -56.10 },
+    'JOAO PESSOA': { lat: -7.12, lon: -34.86 }, 'SAO LUIS': { lat: -2.53, lon: -44.30 }
+  };
+
   // ---------- utilidades ----------
   const semAcento = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '');
   const chaveTexto = s => semAcento(s).toUpperCase().replace(/\s+/g, ' ').trim();
@@ -194,7 +201,7 @@
       resumo: { total_abastecimentos: 0, total_multas: 0, total_frota: 0, atualizado: null },
       versao: VERSAO,
       abastecimentos: [], multas: [], frota: [],
-      ajustes: { kmMax: 3000, unidadePorPlaca: {}, ufPorMulta: {}, localUF: {} },
+      ajustes: { kmMax: 3000, unidadePorPlaca: {}, ufPorMulta: {}, localUF: {}, localUnidade: {} },
       importacoes: []
     };
   }
@@ -393,7 +400,7 @@
   async function statusGit() { try { const r = await fetch('api/status', { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; } }
 
   window.Dados = {
-    SEM_UNIDADE, UFS, NOMES_UF, SIGLAS: [...SIGLAS].sort(),
+    SEM_UNIDADE, LOCAL_UNIDADES, UFS, NOMES_UF, SIGLAS: [...SIGLAS].sort(),
     lerArquivo, baseVazia, garantir, mesclar, atualizarResumo,
     contexto, filtrar, indicadores, porUnidade, porPlaca, curvaABC, evolucao, pontosAtencao, agrupar, soma,
     carregar, gravar, guardarArquivo, statusGit, salvarCache, normPlaca, normUnidade, isoDe

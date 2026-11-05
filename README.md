@@ -54,6 +54,7 @@ O painel funciona como um Power BI:
 
 Visuais:
 
+- **Mapa das unidades:** estados pintados pelo gasto com combustível e bolhas nas cidades das unidades, do tamanho do custo. Tocar num estado ou numa unidade filtra o painel. Unidades sem local (como a matriz, Carga Geral) são posicionadas em Ajustes, clicando no mapa.
 - **Indicadores:**
   - custo total, diesel, multas, R$/km, km/L e preço do litro;
   - setas comparando com o período anterior, quando há dados para comparar.
@@ -70,6 +71,13 @@ Visuais:
 - **Veículos:** lista completa pela curva ABC.
 - **Pontos de atenção**, com correção ali mesmo: placas sem unidade, multas sem estado, hodômetro inválido e diesel caro.
 - **Dados:** tabelas com busca e exportação para Excel (CSV).
+
+## Apresentação semanal e TV
+
+- Aba **Apresentação**: 6 telas da semana (segunda a domingo) comparadas com a semana anterior: resumo, mapa, eficiência por unidade, postos e preços, veículos e motoristas, pontos de atenção.
+- **Apresentar em tela cheia** para espelhar na TV. Setas do teclado (ou clique) passam as telas.
+- **Gerar PDF**: abre a impressão do navegador. Escolha "Salvar como PDF" para ter uma página por tela.
+- No Painel, o botão de tela cheia (no topo) aumenta as letras para mostrar na TV, e o período **Semana** tem setas para voltar semanas.
 
 ## Regras de cálculo
 

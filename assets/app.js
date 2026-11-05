@@ -11,7 +11,7 @@
 
   const st = {
     base: D.baseVazia(), ctx: null, servidor: false,
-    filtro: { p: '30', de: '', ate: '' },
+    filtro: { p: '30', de: '', ate: '', semOff: 0 },
     sel: { custo: new Set(), unidade: new Set(), uf: new Set(), classe: new Set(), placa: new Set(), motorista: new Set(), periodo: new Set() },
     buscaSlicer: {}, slicerTodos: {},
     graficos: {}, coresUnidade: new Map(), dadosAba: 'abastecimentos', lancAba: 'ab',
@@ -57,6 +57,7 @@
 
   function intervalo() {
     const f = st.filtro, fim = ultimaData();
+    if (f.p === 'sem') { const seg = addDias(semanaDe(fim), 7 * f.semOff); return { de: seg, ate: addDias(seg, 6) }; }
     if (f.p === '7') return { de: addDias(fim, -6), ate: fim };
     if (f.p === '30') return { de: addDias(fim, -29), ate: fim };
     if (f.p === 'mes') return { de: fim.slice(0, 8) + '01', ate: fim };
@@ -203,6 +204,8 @@
     }
 
     const qtdSel = Object.values(st.sel).reduce((s, x) => s + x.size, 0);
+    $('#semNav').hidden = st.filtro.p !== 'sem';
+    if (st.filtro.p === 'sem') { $('#semTxt').textContent = `${dBR(iv.de).slice(0, 5)} a ${dBR(iv.ate)}`; $('#semProx').disabled = st.filtro.semOff >= 0; }
     $('#periodoTxt').textContent = (iv.de ? `${dBR(iv.de)} a ${dBR(iv.ate)}` : 'Todo o histórico') + (P ? ' · setas comparam com o período anterior' : '');
     $('#btnLimparTudo').hidden = !qtdSel;
     $$('.cartao.visual').forEach(c => c.classList.toggle('com-sel', st.sel[c.dataset.dim]?.size > 0));
@@ -253,6 +256,7 @@
     ], { fmt: v => fNum(v), centro: pct(I.qtdDiesel ? (I.qtdDiesel - I.qtdKmInvalido) / I.qtdDiesel : null), centroSub: 'dos abastecimentos' });
     if (I.qtdDiesel) $('#rEfic').insertAdjacentHTML('beforeend', `<div style="display:flex;gap:18px;margin-top:12px;font-size:12.5px;color:var(--text-2);flex-wrap:wrap"><span>R$/km <b class="num" style="color:var(--text)">${I.rsKm == null ? '—' : fBRL3.format(I.rsKm)}</b></span><span>km/L <b class="num" style="color:var(--text)">${fNum(I.kmL, 2)}</b></span><span>Arla <b class="num" style="color:var(--text)">${pct(I.arlaPct, 1)}</b></span></div>`);
 
+    renderMapaPainel();
     renderEvolucao();
     renderMotoristas();
     renderPlacas();
@@ -469,6 +473,210 @@
     }));
   }
 
+  // ---------- mapa do Brasil ----------
+  const MAPA = window.MAPA_BR;
+  const proj = (lat, lon) => [(lon - MAPA.LON0) * MAPA.C * MAPA.K, (MAPA.LAT1 - lat) * MAPA.K];
+  const localUnidade = u => (st.base.ajustes.localUnidade || {})[u] || D.LOCAL_UNIDADES[u] || null;
+  const escuro = () => (document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches);
+  function misturar(a, b, t) {
+    const h = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16));
+    const [r1, g1, b1] = h(a), [r2, g2, b2] = h(b);
+    return `rgb(${Math.round(r1 + (r2 - r1) * t)},${Math.round(g1 + (g2 - g1) * t)},${Math.round(b1 + (b2 - b1) * t)})`;
+  }
+  const RAMPA = () => (escuro() ? ['#22324a', '#5598e7'] : ['#d6e6fa', '#1c5cab']);
+
+  /** Monta o SVG do mapa. ufVal: Map(UF → R$); bolhas: [{unidade, valor}]. */
+  function svgMapa({ ufVal = new Map(), bolhas = [], selUF = new Set(), selUnid = new Set(), siglas = true, ajuste = false }) {
+    const maxUF = Math.max(0, ...ufVal.values());
+    const [baixo, alto] = RAMPA();
+    const temSel = selUF.size || selUnid.size;
+    const ufs = Object.entries(MAPA.uf).map(([uf, d]) => {
+      const v = ufVal.get(uf) || 0;
+      const t = maxUF ? Math.sqrt(v / maxUF) : 0;
+      const fill = ajuste || !v ? 'var(--surface-2)' : misturar(baixo, alto, t);
+      const cls = selUF.size ? (selUF.has(uf) ? 'marcado' : 'apagado') : '';
+      return `<path class="uf ${cls}" data-uf="${uf}" data-dica="${esc(D.NOMES_UF[uf] || uf)}${v ? ' · ' + brl(v) : ' · sem abastecimento'}" d="${d}" fill="${fill}"/>`;
+    }).join('');
+    const rot = siglas ? Object.entries(MAPA.centro).map(([uf, [x, y]]) => {
+      const v = ufVal.get(uf) || 0, t = maxUF ? Math.sqrt(v / maxUF) : 0;
+      return `<text class="uf-sigla" x="${x}" y="${y + 4}" text-anchor="middle" style="${!ajuste && t > .55 ? 'fill:#fff' : ''}">${uf}</text>`;
+    }).join('') : '';
+    const maxB = Math.max(0, ...bolhas.map(b => b.valor));
+    const bs = bolhas.filter(b => localUnidade(b.unidade)).sort((a, b) => b.valor - a.valor).map(b => {
+      const { lat, lon } = localUnidade(b.unidade);
+      const [x, y] = proj(lat, lon);
+      const r = ajuste ? 9 : 9 + 25 * Math.sqrt(maxB ? b.valor / maxB : 0);
+      const cls = selUnid.size ? (selUnid.has(b.unidade) ? 'marcado' : 'apagado') : '';
+      return `<g class="bolha ${cls}" data-unidade="${esc(b.unidade)}" data-dica="${esc(b.unidade)}${ajuste ? '' : ' · ' + brl(b.valor)}">
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${ajuste ? css('--accent') : corUnidade(b.unidade)}" fill-opacity="${ajuste ? 1 : .88}"/>
+        <text class="nome" x="${x.toFixed(1)}" y="${(y - r - 6).toFixed(1)}" text-anchor="middle">${esc(b.unidade)}</text>
+        ${ajuste ? '' : `<text class="valor" x="${x.toFixed(1)}" y="${(y + r + 15).toFixed(1)}" text-anchor="middle">${esc(brlCurto(b.valor))}</text>`}</g>`;
+    }).join('');
+    return `<svg viewBox="-10 -30 ${MAPA.w + 20} ${MAPA.h + 40}" role="img" aria-label="Mapa do Brasil com as unidades">${ufs}${rot}${bs}</svg>`;
+  }
+
+  function ligarDicas(el) {
+    let dica = el.querySelector('.mapa-dica');
+    if (!dica) { dica = document.createElement('div'); dica.className = 'mapa-dica'; el.appendChild(dica); }
+    el.onmousemove = e => {
+      const alvo = e.target.closest('[data-dica]');
+      if (!alvo) { dica.style.display = 'none'; return; }
+      const b = el.getBoundingClientRect();
+      dica.textContent = alvo.dataset.dica;
+      dica.style.left = (e.clientX - b.left) + 'px'; dica.style.top = (e.clientY - b.top) + 'px'; dica.style.display = 'block';
+    };
+    el.onmouseleave = () => { dica.style.display = 'none'; };
+  }
+
+  function legendaMapa(ufVal, semLocal) {
+    const [baixo, alto] = RAMPA();
+    const vals = [...ufVal.values()].filter(v => v > 0);
+    return `<div class="mapa-legenda"><span>Combustível por estado: ${brlCurto(vals.length ? Math.min(...vals) : 0)}<span class="grad" style="background:linear-gradient(90deg,${baixo},${alto})"></span>${brlCurto(vals.length ? Math.max(...vals) : 0)}</span>
+      <span><svg width="34" height="16" style="vertical-align:middle"><circle cx="6" cy="8" r="4" fill="var(--text-3)"/><circle cx="24" cy="8" r="7" fill="var(--text-3)"/></svg> bolha = custo total da unidade</span></div>` +
+      (semLocal.length ? `<div class="mapa-sem-local">Fora do mapa (sem local definido): ${semLocal.map(b => `${esc(b.unidade)} ${brlCurto(b.valor)}`).join(' · ')} — posicione em Ajustes.</div>` : '');
+  }
+
+  function renderMapaPainel() {
+    const rUF = dados('uf'), rU = dados('unidade');
+    const ufVal = new Map();
+    for (const a of rUF.ab) if (a.uf) ufVal.set(a.uf, (ufVal.get(a.uf) || 0) + a.valor);
+    const bolhas = D.porUnidade(rU.ab, rU.mu).filter(u => u.custoTotal > 0 && u.unidade !== D.SEM_UNIDADE).map(u => ({ unidade: u.unidade, valor: u.custoTotal }));
+    const el = $('#mapaPainel');
+    el.innerHTML = svgMapa({ ufVal, bolhas, selUF: st.sel.uf, selUnid: st.sel.unidade }) + legendaMapa(ufVal, bolhas.filter(b => !localUnidade(b.unidade)));
+    ligarDicas(el);
+    el.querySelectorAll('.uf').forEach(p => p.addEventListener('click', e => selecionar('uf', [p.dataset.uf], multiClique(e))));
+    el.querySelectorAll('.bolha').forEach(g => g.addEventListener('click', e => { e.stopPropagation(); selecionar('unidade', [g.dataset.unidade], multiClique(e)); }));
+
+    // barras de unidades ao lado do mapa
+    const lista = D.porUnidade(rU.ab, rU.mu).filter(u => u.custoTotal > 0).sort((a, b) => b.custoTotal - a.custoTotal);
+    const maior = lista.length ? lista[0].custoTotal : 1;
+    $('#barUnidades').innerHTML = lista.length ? lista.map(u => `<div class="barra ${classeLinha('unidade', u.unidade)}" data-v="${esc(u.unidade)}" title="${esc(u.unidade)}: combustível ${brl(u.custoDiesel + u.custoArla + u.custoOutros)} · multas ${brl(u.custoMultas)}">
+        <span class="nome"><span class="unid-cor" style="background:${corUnidade(u.unidade)}"></span>${esc(u.unidade)}</span>
+        <span class="trilho"><span style="width:${(u.custoTotal / maior) * 100}%;background:${corUnidade(u.unidade)}"></span></span>
+        <span class="val">${brlCurto(u.custoTotal)}</span></div>`).join('') : '<div class="vazio">Sem dados para esta seleção</div>';
+    $$('#barUnidades .barra').forEach(b => b.addEventListener('click', e => selecionar('unidade', [b.dataset.v], multiClique(e))));
+  }
+
+  // ---------- ajustes: posicionar unidade no mapa ----------
+  function renderAjusteMapa() {
+    const sel = $('#ajMapaUnidade');
+    const unidades = [...new Set([...Object.keys(D.LOCAL_UNIDADES), ...Object.keys(st.base.ajustes.localUnidade || {}), ...st.ctx.abast.map(a => a.unidade), ...st.ctx.multas.map(m => m.unidade), ...st.base.frota.map(f => f.unidade)])]
+      .filter(u => u && u !== D.SEM_UNIDADE).sort();
+    const atual = sel.value || unidades.find(u => !localUnidade(u)) || unidades[0] || '';
+    sel.innerHTML = unidades.map(u => `<option ${u === atual ? 'selected' : ''} value="${esc(u)}">${esc(u)}${localUnidade(u) ? '' : ' (sem local)'}</option>`).join('');
+    const loc = localUnidade(atual);
+    $('#ajMapaInfo').textContent = loc ? `Local atual: ${loc.lat.toFixed(2)}, ${loc.lon.toFixed(2)} · clique no mapa para mudar` : 'Ainda sem local · clique no mapa onde a unidade fica';
+    const el = $('#mapaAjuste');
+    el.innerHTML = svgMapa({ bolhas: unidades.filter(localUnidade).map(u => ({ unidade: u, valor: 1 })), ajuste: true, selUnid: new Set([atual]) });
+    ligarDicas(el);
+    const svg = el.querySelector('svg');
+    svg.addEventListener('click', e => {
+      const u = sel.value; if (!u) return;
+      const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+      const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+      const lon = +(p.x / (MAPA.C * MAPA.K) + MAPA.LON0).toFixed(3), lat = +(MAPA.LAT1 - p.y / MAPA.K).toFixed(3);
+      alterar(b => { b.ajustes.localUnidade = b.ajustes.localUnidade || {}; b.ajustes.localUnidade[u] = { lat, lon }; }, `Ajuste: local da unidade ${u} no mapa`);
+    });
+    sel.onchange = () => renderAjusteMapa();
+    const proprios = Object.entries(st.base.ajustes.localUnidade || {}).sort();
+    $('#listaMapa').innerHTML = proprios.length ? proprios.map(([u, l]) => `<div><span><b>${esc(u)}</b> → ${l.lat.toFixed(2)}, ${l.lon.toFixed(2)}</span><button class="x" data-del-mapa="${esc(u)}" title="Voltar ao padrão">×</button></div>`).join('') : '<p class="sub">Usando os locais padrão das unidades.</p>';
+    $$('[data-del-mapa]').forEach(b => b.onclick = () => alterar(base => { delete base.ajustes.localUnidade[b.dataset.delMapa]; }, `Ajuste: local padrão para ${b.dataset.delMapa}`));
+  }
+
+  // ---------- apresentação semanal ----------
+  const apr = { off: 0, atual: 0, total: 0 };
+  function semana(off) { const seg = addDias(semanaDe(ultimaData()), 7 * off); return { de: seg, ate: addDias(seg, 6) }; }
+  const curto = iso => dBR(iso).slice(0, 5);
+  function sDelta(atual, ant, menorMelhor = true, fmt = v => pct(Math.abs(v))) {
+    if (atual == null || ant == null || !ant) return '';
+    const v = atual / ant - 1;
+    if (Math.abs(v) < 0.005) return '<span class="s-delta">= estável</span>';
+    const ruim = menorMelhor ? v > 0 : v < 0;
+    return `<span class="s-delta ${ruim ? 'sobe' : 'desce'}">${v > 0 ? '▲' : '▼'} ${fmt(v)}</span>`;
+  }
+  function sBarras(itens, fmt = brlCurto, cor = () => css('--accent')) {
+    const max = Math.max(0, ...itens.map(i => i.valor)) || 1;
+    return `<div class="s-barras">${itens.map(i => `<div class="s-barra"><span class="n" title="${esc(i.nome)}">${esc(i.nome)}</span><span class="t"><span style="width:${(i.valor / max) * 100}%;background:${cor(i)}"></span></span><span class="v">${fmt(i.valor)} ${i.extra || ''}</span></div>`).join('')}</div>`;
+  }
+
+  function renderApresentacao() {
+    const w = semana(apr.off), wa = semana(apr.off - 1);
+    const fim = ultimaData();
+    const parcial = w.ate > fim;
+    $('#aprSemana').textContent = `${curto(w.de)} a ${dBR(w.ate)}${parcial ? ' (parcial)' : ''}`;
+    $('#aprProx').disabled = apr.off >= 0;
+    const S = D.filtrar(st.ctx, w), A = D.filtrar(st.ctx, wa);
+    const I = D.indicadores(S.ab, S.mu), IA = (A.ab.length || A.mu.length) ? D.indicadores(A.ab, A.mu) : null;
+    const periodo = `Semana de ${curto(w.de)} a ${dBR(w.ate)}${parcial ? ` · dados até ${dBR(fim)}` : ''}`;
+    const slides = [];
+    const slide = (titulo, corpo, classe = '') => slides.push({ titulo, corpo, classe });
+
+    // 1. resumo
+    const k = (rot, val, sub, delta, cls = '') => `<div class="s-kpi ${cls}"><div class="rot">${rot}</div><div class="val">${val}</div><div class="sub">${delta || ''} ${sub}</div></div>`;
+    slide('Resumo da semana', `
+      ${k('Custo total', brl(I.custoTotal), IA ? 'vs semana anterior' : '', IA && sDelta(I.custoTotal, IA.custoTotal), 'destaque')}
+      ${k('Diesel', brl(I.custoDiesel), `${fNum(I.litrosDiesel)} litros`, IA && sDelta(I.custoDiesel, IA.custoDiesel))}
+      ${k('Multas', brl(I.custoMultas), `${fNum(I.qtdMultas)} infrações`, IA && sDelta(I.custoMultas, IA.custoMultas))}
+      ${k('Custo por km', I.rsKm == null ? '—' : fBRL3.format(I.rsKm), `${fNum(I.km)} km válidos`, IA && sDelta(I.rsKm, IA.rsKm))}
+      ${k('Km por litro', fNum(I.kmL, 2), 'média do diesel', IA && sDelta(I.kmL, IA.kmL, false))}
+      ${k('Preço do litro', I.rsLitro == null ? '—' : fBRL3.format(I.rsLitro), `Arla ${pct(I.arlaPct, 1)} do diesel`, IA && sDelta(I.rsLitro, IA.rsLitro))}`, 's-kpis');
+
+    // 2. mapa + unidades
+    const ufVal = new Map(); for (const a of S.ab) if (a.uf) ufVal.set(a.uf, (ufVal.get(a.uf) || 0) + a.valor);
+    const U = D.porUnidade(S.ab, S.mu).filter(u => u.custoTotal > 0).sort((a, b) => b.custoTotal - a.custoTotal);
+    const UA = new Map(D.porUnidade(A.ab, A.mu).map(u => [u.unidade, u]));
+    const bolhas = U.filter(u => u.unidade !== D.SEM_UNIDADE).map(u => ({ unidade: u.unidade, valor: u.custoTotal }));
+    slide('Onde gastamos', `<div class="s-bloco"><div class="s-mapa mapa">${svgMapa({ ufVal, bolhas, siglas: true })}</div></div>
+      <div class="s-bloco"><h4>Custo por unidade · variação vs semana anterior</h4>${U.length ? sBarras(U.map(u => ({ nome: u.unidade, valor: u.custoTotal, extra: UA.get(u.unidade) ? sDelta(u.custoTotal, UA.get(u.unidade).custoTotal).replace('s-delta', 's-delta d') : '' })), brlCurto, i => corUnidade(i.nome)) : '<div class="s-vazio">Sem dados na semana</div>'}</div>`, 's-dois');
+
+    // 3. eficiência por unidade
+    slide('Eficiência por unidade', U.length ? `<div class="s-bloco"><table class="s-tabela"><thead><tr><th>Unidade</th><th class="dir">Custo total</th><th class="dir">vs anterior</th><th class="dir">Litros diesel</th><th class="dir">Km válidos</th><th class="dir">R$/km</th><th class="dir">km/L</th><th class="dir">Multas</th></tr></thead><tbody>${U.map(u => `<tr><td><span class="unid-cor" style="background:${corUnidade(u.unidade)}"></span><b>${esc(u.unidade)}</b></td><td class="dir num">${brl(u.custoTotal)}</td><td class="dir">${UA.get(u.unidade) ? sDelta(u.custoTotal, UA.get(u.unidade).custoTotal) : '<span class="s-delta">novo</span>'}</td><td class="dir num">${fNum(u.litrosDiesel)}</td><td class="dir num">${fNum(u.km)}</td><td class="dir">${chipVsMedia(u.rsKm, I.rsKm, true, v => fBRL3.format(v))}</td><td class="dir">${chipVsMedia(u.kmL, I.kmL, false, v => fNum(v, 2))}</td><td class="dir num">${u.qtdMultas ? brl(u.custoMultas) : '—'}</td></tr>`).join('')}</tbody></table><div class="slide-rodape"><span>Verde = melhor que a média da frota na semana · vermelho = pior</span></div></div>` : '<div class="s-vazio">Sem dados na semana</div>');
+
+    // 4. postos e preços
+    const dieselS = S.ab.filter(a => a.combustivel === 'DIESEL');
+    const postos = [...D.agrupar(dieselS, a => a.posto + '|' + a.uf).entries()].map(([k2, l]) => { const [posto, uf] = k2.split('|'); const L = D.soma(l, a => a.litros), V = D.soma(l, a => a.valor); return { posto, uf, L, V, preco: L ? V / L : 0 }; }).filter(p => p.L > 0);
+    const media = I.rsLitro || 0;
+    const caros = [...postos].sort((a, b) => b.preco - a.preco).slice(0, 6);
+    const porUF = [...D.agrupar(dieselS, a => a.uf || 'N/I').entries()].map(([uf, l]) => ({ nome: uf, valor: D.soma(l, a => a.valor) / (D.soma(l, a => a.litros) || 1) })).sort((a, b) => b.valor - a.valor);
+    const aMais = D.soma(caros.filter(p => p.preco > media), p => (p.preco - media) * p.L);
+    slide('Postos e preços do diesel', postos.length ? `<div class="s-bloco"><h4>Postos mais caros da semana · média da frota ${fBRL3.format(media)}</h4>
+        <table class="s-tabela"><thead><tr><th>Posto</th><th>UF</th><th class="dir">Litros</th><th class="dir">R$/L</th><th class="dir">vs média</th></tr></thead><tbody>${caros.map(p => `<tr><td>${esc(p.posto)}</td><td>${esc(p.uf)}</td><td class="dir num">${fNum(p.L)}</td><td class="dir num"><b>${fBRL3.format(p.preco)}</b></td><td class="dir"><span class="s-delta ${p.preco > media ? 'sobe' : 'desce'}">${p.preco > media ? '+' : ''}${fBRL3.format(p.preco - media)}</span></td></tr>`).join('')}</tbody></table>
+        <div class="slide-rodape"><span>Nesses postos, acima da média, pagou-se cerca de <b>${brl(aMais)}</b> a mais.</span></div></div>
+      <div class="s-bloco"><h4>Preço médio do diesel por estado (R$/L)</h4>${sBarras(porUF, v => fBRL3.format(v), i => i.valor > media ? css('--s2') : css('--s3'))}</div>` : '<div class="s-vazio">Sem abastecimentos de diesel na semana</div>', 's-dois-iguais');
+
+    // 5. veículos e motoristas
+    const abc = D.curvaABC(D.porPlaca(S.ab, S.mu, st.ctx), p => p.custoDiesel).slice(0, 8);
+    const mot = new Map(); for (const a of S.ab) mot.set(a.motorista || '(sem nome)', (mot.get(a.motorista || '(sem nome)') || 0) + a.valor); for (const m of S.mu) mot.set(m.motorista || '(sem nome)', (mot.get(m.motorista || '(sem nome)') || 0) + m.valor);
+    const topMot = [...mot.entries()].map(([nome, valor]) => ({ nome, valor })).sort((a, b) => b.valor - a.valor).slice(0, 8);
+    slide('Veículos e motoristas', `<div class="s-bloco"><h4>Veículos que mais gastaram com diesel</h4>${abc.length ? `<table class="s-tabela"><thead><tr><th>Placa</th><th>Unidade</th><th class="dir">Diesel</th><th class="dir">km/L</th></tr></thead><tbody>${abc.map(p => `<tr><td><span class="abc-badge abc-${p.classe}">${p.classe}</span> <b>${esc(p.placa)}</b></td><td>${esc(p.unidade)}</td><td class="dir num">${brl(p.custoDiesel)}</td><td class="dir">${chipVsMedia(p.kmL, I.kmL, false, v => fNum(v, 2))}</td></tr>`).join('')}</tbody></table>` : '<div class="s-vazio">Sem dados</div>'}</div>
+      <div class="s-bloco"><h4>Motoristas que mais gastaram (combustível + multas)</h4>${topMot.length ? sBarras(topMot) : '<div class="s-vazio">Sem dados</div>'}</div>`, 's-dois-iguais');
+
+    // 6. pontos de atenção
+    const P = D.pontosAtencao(st.ctx, S.ab, S.mu);
+    const it = [];
+    if (P.kmInv.length) it.push(['warn', 'km', `${P.kmInv.length} abastecimentos com hodômetro inválido`, `Ficam fora do R$/km e do km/L. Placas: ${[...new Set(P.kmInv.map(a => a.placa))].slice(0, 8).join(', ')}`]);
+    if (P.precoAlto.length) it.push(['info', 'R$', `${P.precoAlto.length} abastecimentos com diesel mais de 15% acima da média`, [...new Set(P.precoAlto.map(a => `${a.posto} (${a.uf})`))].slice(0, 4).join(' · ')]);
+    if (I.arlaPct != null && (I.arlaPct < 0.04 || I.arlaPct > 0.07)) it.push(['warn', '%', `Arla em ${pct(I.arlaPct, 1)} do diesel`, 'O normal fica perto de 5%. Vale conferir se algum veículo está rodando sem Arla ou se há lançamento errado.']);
+    if (P.placasSemUnidade.size) it.push(['crit', '!', `${P.placasSemUnidade.size} placas sem unidade`, [...P.placasSemUnidade.keys()].slice(0, 10).join(', ')]);
+    if (P.multasSemUF.length) it.push(['warn', '?', `${P.multasSemUF.length} multas sem estado identificado`, 'Corrigir na aba Painel → Pontos de atenção.']);
+    slide('Pontos de atenção', `<div class="s-lista">${it.length ? it.map(([c, ic, t, s]) => `<div class="s-item"><div class="ic ${c}">${ic}</div><div><b>${esc(t)}</b>${esc(s)}</div></div>`).join('') : '<div class="s-item"><div class="ic ok">✓</div><div><b>Tudo certo</b>Nenhum problema nos dados da semana.</div></div>'}</div>`);
+
+    apr.total = slides.length;
+    apr.atual = Math.min(apr.atual, apr.total - 1);
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    $('#aprSlides').innerHTML = slides.map((s, i) => `<section class="slide ${i === apr.atual ? 'ativo' : ''}">
+      <div class="slide-cab"><span class="num-slide">${i + 1}/${slides.length}</span><h2>${s.titulo}</h2><span class="periodo">${periodo}</span></div>
+      <div class="slide-corpo ${s.classe}">${s.corpo}</div>
+      <div class="slide-rodape"><span>Painel da Frota</span><span>gerado em ${hoje}</span></div></section>`).join('');
+    $('#aprPontos').innerHTML = slides.map((_, i) => `<button class="${i === apr.atual ? 'ativo' : ''}" data-i="${i}" aria-label="Tela ${i + 1}"></button>`).join('');
+    $$('#aprPontos button').forEach(b => b.addEventListener('click', () => irSlide(+b.dataset.i)));
+  }
+  function irSlide(i) {
+    apr.atual = Math.max(0, Math.min(apr.total - 1, i));
+    $$('#aprSlides .slide').forEach((s, k) => s.classList.toggle('ativo', k === apr.atual));
+    $$('#aprPontos button').forEach((b, k) => b.classList.toggle('ativo', k === apr.atual));
+  }
+
   // ---------- gravação segura ----------
   async function alterar(mudanca, mensagem) {
     if (!st.servidor) { toast('Sem servidor: abra pelo "Abrir Painel.bat" para gravar.'); return false; }
@@ -611,6 +819,8 @@
     renderPainel();
     renderImportar();
     renderAjustes();
+    renderAjusteMapa();
+    if ($('#tela-apresentacao').classList.contains('ativa')) renderApresentacao();
   }
 
   function ligar() {
@@ -619,7 +829,38 @@
       $$('.tela').forEach(t => t.classList.toggle('ativa', t.id === 'tela-' + b.dataset.tela));
       if (b.dataset.tela === 'dados') renderDados();
       if (b.dataset.tela === 'painel') renderPainel();
+      if (b.dataset.tela === 'apresentacao') renderApresentacao();
+      if (b.dataset.tela === 'ajustes') renderAjusteMapa();
     }));
+    // semana no painel
+    $('#semAnt').addEventListener('click', () => { st.filtro.semOff--; st.sel.periodo.clear(); renderPainel(); });
+    $('#semProx').addEventListener('click', () => { if (st.filtro.semOff < 0) { st.filtro.semOff++; st.sel.periodo.clear(); renderPainel(); } });
+    // apresentação
+    $('#aprAnt').addEventListener('click', () => { apr.off--; renderApresentacao(); });
+    $('#aprProx').addEventListener('click', () => { if (apr.off < 0) { apr.off++; renderApresentacao(); } });
+    $('#aprVolta').addEventListener('click', () => irSlide(apr.atual - 1));
+    $('#aprAvanca').addEventListener('click', () => irSlide(apr.atual + 1));
+    $('#aprTela').addEventListener('click', () => {
+      const p = $('#aprPalco');
+      (p.requestFullscreen ? p.requestFullscreen() : Promise.reject()).catch(() => toast('O navegador não permitiu tela cheia'));
+    });
+    $('#aprPDF').addEventListener('click', () => { renderApresentacao(); toast('Na janela que abrir, escolha "Salvar como PDF"', 5000); setTimeout(() => window.print(), 300); });
+    $('#aprSlides').addEventListener('click', e => { if (document.fullscreenElement && !e.target.closest('button, a')) irSlide(apr.atual + 1); });
+    document.addEventListener('keydown', e => {
+      if (!$('#tela-apresentacao').classList.contains('ativa') || (e.target.closest && e.target.closest('input, select, textarea'))) return;
+      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); irSlide(apr.atual + 1); }
+      if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); irSlide(apr.atual - 1); }
+      if (e.key === 'Home') irSlide(0);
+      if (e.key === 'End') irSlide(apr.total - 1);
+    });
+    // tela cheia do painel (TV)
+    $('#btnTV').addEventListener('click', () => {
+      if (document.fullscreenElement) { document.exitFullscreen(); return; }
+      document.documentElement.requestFullscreen().then(() => { document.body.classList.add('tv'); renderPainel(); }).catch(() => toast('O navegador não permitiu tela cheia'));
+    });
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && document.body.classList.contains('tv')) { document.body.classList.remove('tv'); renderPainel(); }
+    });
     $$('#segPeriodo button').forEach(b => b.addEventListener('click', () => {
       st.filtro.p = b.dataset.p;
       st.sel.periodo.clear(); // as semanas/meses mudam com o período
@@ -635,7 +876,7 @@
     $('#btnFecharFiltros').addEventListener('click', () => $('#filtrosLado').classList.remove('aberto'));
     $$('#abasLanc button').forEach(b => b.addEventListener('click', () => { st.lancAba = b.dataset.l; const { ab, mu } = dados(null); renderLancamentos(ab, mu); }));
     document.addEventListener('keydown', e => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== 'Escape' || document.fullscreenElement) return;
       if ($('#filtrosLado').classList.contains('aberto')) { $('#filtrosLado').classList.remove('aberto'); return; }
       if (e.target.closest && e.target.closest('input, select, textarea')) return;
       if (Object.values(st.sel).some(s => s.size)) { limparTudo(); toast('Seleções limpas'); }
@@ -661,6 +902,8 @@
       document.documentElement.dataset.theme = escuro ? 'light' : 'dark';
       try { localStorage.setItem('painelFrota.tema', document.documentElement.dataset.theme); } catch (e) {}
       renderPainel();
+      renderAjusteMapa();
+      if ($('#tela-apresentacao').classList.contains('ativa')) renderApresentacao();
     });
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => renderPainel());
   }

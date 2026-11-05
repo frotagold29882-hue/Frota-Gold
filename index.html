@@ -20,10 +20,14 @@
       <button class="aba ativa" data-tela="painel">Painel</button>
       <button class="aba" data-tela="importar">Importar</button>
       <button class="aba" data-tela="dados">Dados</button>
+      <button class="aba" data-tela="apresentacao">Apresentação</button>
       <button class="aba" data-tela="ajustes">Ajustes</button>
     </nav>
     <div class="topo-dir">
       <span class="selo" id="seloGit" title="Situação do salvamento"><span class="ponto"></span><span>Verificando…</span></span>
+      <button class="icone-btn" id="btnTV" title="Tela cheia (TV)" aria-label="Tela cheia">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
       <button class="icone-btn" id="btnTema" title="Alternar tema claro/escuro" aria-label="Alternar tema">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       </button>
@@ -49,12 +53,18 @@
         <div class="fl-bloco">
           <h4>Período</h4>
           <div class="seg seg-grade" id="segPeriodo">
+            <button data-p="sem">Semana</button>
             <button data-p="7">7 dias</button>
             <button data-p="30" class="ativo">30 dias</button>
             <button data-p="mes">Este mês</button>
             <button data-p="ano">Este ano</button>
             <button data-p="tudo">Tudo</button>
             <button data-p="livre">Datas</button>
+          </div>
+          <div class="sem-nav" id="semNav" hidden>
+            <button class="btn peq" id="semAnt" aria-label="Semana anterior">‹</button>
+            <span id="semTxt"></span>
+            <button class="btn peq" id="semProx" aria-label="Próxima semana">›</button>
           </div>
           <div class="fl-datas" id="campoDatas" hidden>
             <input type="date" id="fDe" aria-label="De"><input type="date" id="fAte" aria-label="Até">
@@ -74,6 +84,17 @@
         <p class="dica">Clique numa fatia, barra ou linha para filtrar o painel inteiro. <b>Ctrl + clique</b> seleciona vários. <b>Esc</b> limpa tudo.</p>
 
         <div class="kpis" id="kpis"></div>
+
+        <div class="grade g-mapa">
+          <div class="cartao visual" data-dim="uf">
+            <div class="cartao-cab"><div><h3>Mapa das unidades</h3><p class="sub">Estados pintados pelo gasto com combustível · bolhas = custo total de cada unidade. Toque num estado ou numa unidade.</p></div></div>
+            <div class="mapa" id="mapaPainel"></div>
+          </div>
+          <div class="cartao visual" data-dim="unidade">
+            <h3>Unidades</h3><p class="sub">Custo total · toque para filtrar</p>
+            <div class="barras" id="barUnidades"></div>
+          </div>
+        </div>
 
         <div class="grade g3">
           <div class="cartao visual" data-dim="custo"><h3>Para onde vai o dinheiro</h3><p class="sub">Tipo de custo</p><div id="rCompos"></div></div>
@@ -160,6 +181,26 @@
     <div class="cartao"><div class="tabela-wrap"><table id="tabDados"></table></div></div>
   </section>
 
+  <!-- ================= APRESENTAÇÃO ================= -->
+  <section class="tela" id="tela-apresentacao">
+    <div class="apr-barra">
+      <div class="sem-nav">
+        <button class="btn peq" id="aprAnt" aria-label="Semana anterior">‹</button>
+        <b id="aprSemana"></b>
+        <button class="btn peq" id="aprProx" aria-label="Próxima semana">›</button>
+      </div>
+      <span class="contador">Semana de segunda a domingo, comparada com a anterior · setas ← → passam as telas</span>
+      <div class="apr-acoes">
+        <button class="btn prim" id="aprTela">Apresentar em tela cheia</button>
+        <button class="btn" id="aprPDF">Gerar PDF</button>
+      </div>
+    </div>
+    <div class="apr-palco" id="aprPalco">
+      <div class="apr-slides" id="aprSlides"></div>
+      <div class="apr-nav"><button class="apr-seta" id="aprVolta" aria-label="Tela anterior">‹</button><div class="apr-pontos" id="aprPontos"></div><button class="apr-seta" id="aprAvanca" aria-label="Próxima tela">›</button></div>
+    </div>
+  </section>
+
   <!-- ================= AJUSTES ================= -->
   <section class="tela" id="tela-ajustes">
     <div class="grade g2">
@@ -186,12 +227,20 @@
         <div class="form-linha"><input id="ajLocal" placeholder="Trecho do local (ex.: BR 316)" style="width:220px"><select id="ajLocalUF"></select><button class="btn prim peq" id="ajLocalAdd">Adicionar</button></div>
         <div class="lista-aj" id="listaLocais"></div>
       </div>
+      <div class="cartao aj-mapa">
+        <h3>Local das unidades no mapa</h3>
+        <p class="sub">Escolha a unidade e clique no mapa onde ela fica. Use para a matriz (Carga Geral) e para unidades novas.</p>
+        <div class="form-linha"><select id="ajMapaUnidade"></select><span class="contador" id="ajMapaInfo"></span></div>
+        <div class="mapa mapa-ajuste" id="mapaAjuste"></div>
+        <div class="lista-aj" id="listaMapa"></div>
+      </div>
     </div>
   </section>
 </main>
 
 <div class="toast" id="toast"></div>
 
+<script src="assets/mapa-brasil.js"></script>
 <script src="assets/data.js"></script>
 <script src="assets/app.js"></script>
 </body>
