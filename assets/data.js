@@ -187,13 +187,76 @@
   }
 
   /** Lê um arquivo e devolve { tipo, registros } detectando pelo cabeçalho. */
+  /** Fatura do TruckPag em CSV (";"): blocos "Transacao Aprovada" e "Transacao Estornada".
+   *  A data vem sem ano (dd/mm); o ano sai da data de referência do arquivo. */
+  function lerFaturaCSV(nome, texto) {
+    const linhasTxt = texto.split(/\r?\n/);
+    if (!linhasTxt.some(l => /^Transacao Aprovada;Data\/Hora;Placa;Hodometro/i.test(l))) return null;
+    // data de referência: AAAA-MM-DD no nome do arquivo, ou alguma data completa dentro dele, ou hoje
+    let ref = (nome.match(/(\d{4})-(\d{2})-(\d{2})/) || []).slice(1).join('-');
+    if (!ref) { const m = texto.match(/(\d{2})\/(\d{2})\/(\d{4})/); ref = m ? `${m[3]}-${m[2]}-${m[1]}` : isoDe(new Date()); }
+    const [anoRef, mesRef] = [+ref.slice(0, 4), +ref.slice(5, 7)];
+    function dataHora(v) {
+      const s = String(v || '').trim();
+      let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}:\d{2}))?/);
+      if (m) return [`${m[3]}-${pad(+m[2])}-${pad(+m[1])}`, m[4] || ''];
+      m = s.match(/^(\d{1,2})\/(\d{1,2})(?:\s+(\d{1,2}:\d{2}))?/);
+      if (!m) return [null, ''];
+      const ano = +m[2] > mesRef ? anoRef - 1 : anoRef;
+      return [`${ano}-${pad(+m[2])}-${pad(+m[1])}`, m[3] || ''];
+    }
+    const out = [];
+    let bloco = null, C = null;
+    for (const l of linhasTxt) {
+      const c = l.split(';');
+      if (/^Transacao (Aprovada|Estornada)$/i.test(c[0].trim())) {
+        bloco = /Estornada/i.test(c[0]) ? 'estorno' : 'aprovada';
+        const cab = c.map(chaveTexto);
+        C = { data: cab.indexOf('DATA/HORA'), placa: cab.indexOf('PLACA'), hod: cab.indexOf('HODOMETRO'), mot: cab.indexOf('MOTORISTA'),
+          posto: cab.indexOf('NOME ESTABELECIMENTO'), cidade: cab.indexOf('CIDADE'), uf: cab.indexOf('UF'), comb: cab.findIndex(x => x.startsWith('COMBUSTIVEL')),
+          litros: cab.indexOf('LITRAGEM'), preco: cab.indexOf('VALOR UN.'), valor: cab.indexOf('VALOR TOTAL') };
+        continue;
+      }
+      if (!bloco || !/^\d{5,}$/.test(c[0].trim())) { if (bloco && !c.join('').trim()) bloco = null; continue; }
+      const [dt, hr] = dataHora(c[C.data]);
+      const combTxt = chaveTexto(c[C.comb]);
+      const est = bloco === 'estorno';
+      const litros = Math.abs(num(c[C.litros]) || 0);
+      out.push({
+        id: c[0].trim(), data: dt, hora: hr, posto: String(c[C.posto] || '').trim(), uf: ufDeTexto(c[C.uf]) || chaveTexto(c[C.uf]),
+        cidade: chaveTexto(c[C.cidade]), operacao: '', placa: normPlaca(c[C.placa]), modelo: '', motorista: chaveTexto(c[C.mot]),
+        hodometro: num(c[C.hod]), km: null, litros: est ? -litros : litros,
+        combustivel: combTxt.includes('ARLA') ? 'ARLA' : combTxt.includes('DIESEL') ? 'DIESEL' : (combTxt || 'OUTRO'),
+        combustivelNome: String(c[C.comb] || '').trim() + (est ? ' (estorno)' : ''),
+        preco: num(c[C.preco]) == null ? null : Math.abs(num(c[C.preco])), valor: est ? -Math.abs(num(c[C.valor]) || 0) : (num(c[C.valor]) || 0),
+        estorno: est || undefined, origem: 'fatura TruckPag'
+      });
+    }
+    return out.length ? out : null;
+  }
+
+  function ehConsolidadoPorPosto(wb) {
+    for (const nome of wb.SheetNames) {
+      const h = acharCabecalho(linhas(wb.Sheets[nome]), ['POSTO', 'TRANSACOES', 'LITRAGEM']);
+      if (h && h.cab.includes('PRECO MEDIO') && !h.cab.includes('PLACA')) return true;
+    }
+    return false;
+  }
+
   function lerArquivo(nome, buffer) {
+    if (/\.(csv|txt)$/i.test(nome)) {
+      let texto = new TextDecoder('utf-8').decode(buffer);
+      if (texto.includes('�')) texto = new TextDecoder('windows-1252').decode(buffer);
+      const f = lerFaturaCSV(nome, texto);
+      if (f) return { tipo: 'abastecimentos', registros: f, formato: 'Fatura TruckPag (CSV)' };
+    }
     const wb = XLSX.read(buffer, { type: 'array', cellDates: false });
     let r;
-    if ((r = lerAbastecimentos(wb))) return { tipo: 'abastecimentos', registros: r };
-    if ((r = lerMultas(wb))) return { tipo: 'multas', registros: r };
-    if ((r = lerFrota(wb))) return { tipo: 'frota', registros: r };
-    throw new Error(`Não reconheci o arquivo "${nome}". Esperado: listagem de abastecimentos, planilha de multas ou cadastro da frota.`);
+    if ((r = lerAbastecimentos(wb))) return { tipo: 'abastecimentos', registros: r, formato: 'Listagem de abastecimentos' };
+    if ((r = lerMultas(wb))) return { tipo: 'multas', registros: r, formato: 'Multas' };
+    if ((r = lerFrota(wb))) return { tipo: 'frota', registros: r, formato: 'Cadastro da frota' };
+    if (ehConsolidadoPorPosto(wb)) throw new Error('É um relatório consolidado POR POSTO: não tem placa, motorista nem km, então não dá para separar por unidade nem calcular R$/km. Não foi importado. Use a fatura do TruckPag (CSV) ou a listagem de abastecimentos.');
+    throw new Error(`Não reconheci o arquivo "${nome}". Esperado: fatura do TruckPag (CSV), listagem de abastecimentos, planilha de multas ou cadastro da frota.`);
   }
 
   // ---------- base consolidada ----------
@@ -263,10 +326,26 @@
     }
 
     const kmMax = Number(aj.kmMax) || 3000;
+    // Km percorrido: usa o "Percorrido" do relatório; se não vier (fatura CSV), calcula pelo hodômetro
+    // = hodômetro atual − maior hodômetro anterior da mesma placa.
+    const porPlacaHod = new Map();
+    for (const a of base.abastecimentos) if (a.hodometro > 0 && !a.estorno) { if (!porPlacaHod.has(a.placa)) porPlacaHod.set(a.placa, []); porPlacaHod.get(a.placa).push(a); }
+    for (const l of porPlacaHod.values()) l.sort((x, y) => String(x.data).localeCompare(String(y.data)) || x.hodometro - y.hodometro);
+    function kmPeloHodometro(a) {
+      const l = porPlacaHod.get(a.placa); if (!l) return null;
+      let ant = null;
+      for (const b of l) {
+        if (b === a || String(b.data) > String(a.data)) break;
+        if (b.data === a.data && b.posto === a.posto) continue; // mesma parada (ex.: Arla e diesel juntos)
+        if (b.hodometro < a.hodometro && (ant == null || b.hodometro > ant)) ant = b.hodometro;
+      }
+      return ant == null ? null : a.hodometro - ant;
+    }
     const abast = base.abastecimentos.map(a => {
       const unidade = a.operacao && a.operacao !== SEM_UNIDADE ? a.operacao : unidadePlaca(a.placa);
-      const kmValido = a.combustivel === 'DIESEL' && a.km > 0 && a.km <= kmMax;
-      return Object.assign({}, a, { unidade, kmValido });
+      const km = a.km != null ? a.km : (a.estorno || !(a.hodometro > 0) ? null : kmPeloHodometro(a));
+      const kmValido = !a.estorno && a.combustivel === 'DIESEL' && km > 0 && km <= kmMax;
+      return Object.assign({}, a, { unidade, km, kmValido });
     });
     // Duplicidade: mesmo nº de infração conta 1 vez (a chave da base já garante)
     const multas = base.multas.map(m => Object.assign({}, m, { unidade: unidadePlaca(m.placa), ufCalc: ufMulta(m), noCadastro: frota.has(m.placa) }));
@@ -299,7 +378,8 @@
     return {
       custoTotal: custoDiesel + custoArla + outros + custoMultas,
       custoDiesel, custoArla, custoOutros: outros, custoMultas, qtdMultas: mu.length,
-      litrosDiesel, litrosArla, km, qtdAbast: ab.length, qtdDiesel: diesel.length, qtdKmInvalido: diesel.length - validos.length,
+      litrosDiesel, litrosArla, km, qtdAbast: ab.filter(a => !a.estorno).length, qtdDiesel: diesel.filter(a => !a.estorno).length,
+      qtdKmInvalido: diesel.filter(a => !a.estorno).length - validos.length,
       rsKm: km ? valorValidos / km : null,
       kmL: litrosValidos ? km / litrosValidos : null,
       rsLitro: litrosDiesel ? custoDiesel / litrosDiesel : null,
@@ -359,12 +439,12 @@
   }
 
   function pontosAtencao(ctx, ab, mu) {
-    const kmInv = ab.filter(a => a.combustivel === 'DIESEL' && !a.kmValido);
+    const kmInv = ab.filter(a => a.combustivel === 'DIESEL' && !a.kmValido && !a.estorno);
     const multasSemUF = mu.filter(m => m.ufCalc === 'N/I');
     const placasSemUnidade = new Map();
     for (const x of [...ab, ...mu]) if (x.unidade === SEM_UNIDADE && x.placa) placasSemUnidade.set(x.placa, (placasSemUnidade.get(x.placa) || 0) + 1);
     const forasCadastro = new Set(mu.filter(m => !m.noCadastro && m.placa).map(m => m.placa));
-    const precos = ab.filter(a => a.combustivel === 'DIESEL' && a.preco);
+    const precos = ab.filter(a => a.combustivel === 'DIESEL' && a.preco && !a.estorno);
     const media = precos.length ? soma(precos, a => a.preco) / precos.length : 0;
     const precoAlto = precos.filter(a => a.preco > media * 1.15);
     return { kmInv, multasSemUF, placasSemUnidade, forasCadastro, precoAlto, mediaPreco: media };

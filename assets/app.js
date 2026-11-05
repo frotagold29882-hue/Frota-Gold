@@ -706,7 +706,7 @@
         const buf = await f.arrayBuffer();
         const r = D.lerArquivo(f.name, buf);
         const copia = await D.guardarArquivo(f.name, buf);
-        lidos.push({ nome: f.name, tipo: r.tipo, registros: r.registros, copia });
+        lidos.push({ nome: f.name, tipo: r.tipo, formato: r.formato, registros: r.registros, copia });
       } catch (e) { lidos.push({ nome: f.name, erro: e.message }); }
     }
     const validos = lidos.filter(l => !l.erro);
@@ -725,7 +725,7 @@
     const nomeTipo = { abastecimentos: 'Abastecimentos', multas: 'Multas', frota: 'Cadastro da frota' };
     res.innerHTML = lidos.map(l => l.erro
       ? `<div class="res-item erro"><div class="at-icone crit">!</div><div class="at-txt"><b>${esc(l.nome)}</b><span>${esc(l.erro)}</span></div></div>`
-      : `<div class="res-item"><div class="at-icone info" style="color:var(--good-text)">✓</div><div class="at-txt"><b>${esc(l.nome)} · ${nomeTipo[l.tipo]}</b><span>${fNum(l.registros.length)} lidos · <b>${fNum(l.novos)} novos</b> · ${fNum(l.atualizados)} atualizados · ${fNum(l.iguais)} já existiam</span></div></div>`).join('');
+      : `<div class="res-item"><div class="at-icone info" style="color:var(--good-text)">✓</div><div class="at-txt"><b>${esc(l.nome)} · ${esc(l.formato || nomeTipo[l.tipo])}</b><span>${fNum(l.registros.length)} lidos · <b>${fNum(l.novos)} novos</b> · ${fNum(l.atualizados)} atualizados · ${fNum(l.iguais)} já existiam</span></div></div>`).join('');
     if (git) renderImportar();
   }
 
