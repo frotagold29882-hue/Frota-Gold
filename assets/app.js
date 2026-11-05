@@ -667,7 +667,7 @@
     $('#aprSlides').innerHTML = slides.map((s, i) => `<section class="slide ${i === apr.atual ? 'ativo' : ''}">
       <div class="slide-cab"><span class="num-slide">${i + 1}/${slides.length}</span><h2>${s.titulo}</h2><span class="periodo">${periodo}</span></div>
       <div class="slide-corpo ${s.classe}">${s.corpo}</div>
-      <div class="slide-rodape"><span>Painel da Frota</span><span>gerado em ${hoje}</span></div></section>`).join('');
+      <div class="slide-rodape"><span>Gold Frota</span><span>gerado em ${hoje}</span></div></section>`).join('');
     $('#aprPontos').innerHTML = slides.map((_, i) => `<button class="${i === apr.atual ? 'ativo' : ''}" data-i="${i}" aria-label="Tela ${i + 1}"></button>`).join('');
     $$('#aprPontos button').forEach(b => b.addEventListener('click', () => irSlide(+b.dataset.i)));
   }

@@ -60,7 +60,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .topo-in { max-width: 1560px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .marca { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; letter-spacing: -.01em; }
-.marca-icone { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); display: grid; place-items: center; color: #fff; }
+.marca-icone { width: 34px; height: 34px; display: grid; place-items: center; color: var(--s2); }
 .abas { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 11px; }
 .aba { border: 0; background: transparent; padding: 7px 14px; border-radius: 8px; cursor: pointer; color: var(--text-2); font-weight: 500; }
 .aba:hover { color: var(--text); }

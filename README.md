@@ -1,4 +1,4 @@
-# Painel da Frota
+# Gold Frota — painel da frota
 
 Painel de custos da frota (diesel, Arla e multas), com separação por unidade e por estado e com a curva ABC dos veículos.
 Os dados ficam guardados **dentro deste repositório git**: cada importação vira uma versão e nada é apagado.
