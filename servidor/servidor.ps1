@@ -104,7 +104,17 @@ function Tratar($ctx) {
     $req = $ctx.Request
     $caminho = [Uri]::UnescapeDataString($req.Url.AbsolutePath)
 
-    if ($caminho -eq '/api/status' -and $req.HttpMethod -eq 'GET') { Responder-Json $ctx 200 (Status-Git); return }
+    if ($caminho -eq '/api/status' -and $req.HttpMethod -eq 'GET') {
+        $s = Status-Git; $s.podeEditar = [bool]$req.IsLocal
+        Responder-Json $ctx 200 $s; return
+    }
+
+    # Só este computador pode alterar dados. Quem acessa pela rede apenas visualiza.
+    if ($req.HttpMethod -eq 'POST' -and -not $req.IsLocal) {
+        Escrever-Log "RECUSADO (somente leitura): $($req.HttpMethod) $caminho vindo de $($req.RemoteEndPoint.Address)"
+        Responder-Json $ctx 403 @{ erro = 'Somente visualização: alterações só podem ser feitas no computador do responsável pelo painel.' }
+        return
+    }
 
     if ($caminho -eq '/api/base' -and $req.HttpMethod -eq 'GET') {
         if (Test-Path $BaseJson) { Responder $ctx 200 'application/json; charset=utf-8' ([IO.File]::ReadAllBytes($BaseJson)) }
@@ -170,17 +180,31 @@ function Tratar($ctx) {
     Responder $ctx 200 $tipo ([IO.File]::ReadAllBytes($arq))
 }
 
+# Tenta abrir também para a rede (só funciona depois de rodar "Liberar na rede.bat" como administrador).
+# Se não der, fica só neste computador.
+$naRede = $false
 $escuta = New-Object System.Net.HttpListener
-$escuta.Prefixes.Add("http://localhost:$Porta/")
-try { $escuta.Start() } catch {
-    Write-Host "Não foi possível abrir a porta $Porta. O painel já está aberto em outra janela?" -ForegroundColor Yellow
-    if (-not $SemNavegador) { Start-Process "http://localhost:$Porta/" }
-    exit 1
+$escuta.Prefixes.Add("http://+:$Porta/")
+try { $escuta.Start(); $naRede = $true } catch {
+    try { $escuta.Close() } catch {}
+    $escuta = New-Object System.Net.HttpListener
+    $escuta.Prefixes.Add("http://localhost:$Porta/")
+    try { $escuta.Start() } catch {
+        Write-Host "Não foi possível abrir a porta $Porta. O painel já está aberto em outra janela?" -ForegroundColor Yellow
+        if (-not $SemNavegador) { Start-Process "http://localhost:$Porta/" }
+        exit 1
+    }
 }
 
 Write-Host ''
-Write-Host '  PAINEL DA FROTA' -ForegroundColor Cyan
-Write-Host "  Aberto em http://localhost:$Porta/"
+Write-Host '  GOLD FROTA' -ForegroundColor Cyan
+Write-Host "  Neste computador (pode editar):  http://localhost:$Porta/"
+if ($naRede) {
+    $ips = [System.Net.Dns]::GetHostAddresses([System.Net.Dns]::GetHostName()) | Where-Object { $_.AddressFamily -eq 'InterNetwork' -and -not $_.ToString().StartsWith('169.254') }
+    foreach ($ip in $ips) { Write-Host "  Na rede (somente visualização):  http://$($ip):$Porta/" -ForegroundColor Green }
+} else {
+    Write-Host '  Acesso pela rede: desligado (veja "Liberar na rede.bat").' -ForegroundColor DarkGray
+}
 Write-Host '  Deixe esta janela aberta enquanto usa o painel. Feche-a para encerrar.'
 Write-Host ''
 if (-not $SemNavegador) { Start-Process "http://localhost:$Porta/" }

@@ -679,6 +679,7 @@
 
   // ---------- gravação segura ----------
   async function alterar(mudanca, mensagem) {
+    if (!st.podeEditar) { toast(st.servidor ? 'Somente visualização: alterações só no computador do responsável.' : 'Somente visualização.'); return false; }
     if (!st.servidor) { toast('Sem servidor: abra pelo "Abrir Painel.bat" para gravar.'); return false; }
     try {
       const atual = (await D.carregar()).base; // sempre parte da versão gravada mais recente
@@ -779,6 +780,26 @@
     const txt = [def.cols.map(c => c[1]).join(';'), ...l.map(r => def.cols.map(([k]) => cel(k === 'data' || k === 'venc' ? dBR(r[k]) : r[k])).join(';'))].join('\r\n');
     baixar(new Blob(['﻿' + txt], { type: 'text/csv;charset=utf-8' }), `frota-${st.dadosAba}-${D.isoDe(new Date())}.csv`);
   }
+  /** Gera um único .html, somente visualização, com o painel e os dados de agora embutidos. */
+  async function htmlVisualizacao(quando = new Date()) {
+    const txt = u => fetch(u, { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(u); return r.text(); });
+    const [pagina, cssTxt, mapaJs, dadosJs, appJs] = await Promise.all(['index.html', 'assets/style.css', 'assets/mapa-brasil.js', 'assets/data.js', 'assets/app.js'].map(txt));
+    const seguro = s => s.replace(/<\/(script)/gi, '<\\/$1');
+    let html = pagina
+      .replace('<title>Gold Frota</title>', () => '<title>Gold Frota · visualização</title>')
+      .replace('<link rel="stylesheet" href="assets/style.css">', () => `<style>\n${cssTxt}\n</style>`)
+      .replace('<script src="assets/mapa-brasil.js"></script>', () => `<script>${seguro(mapaJs)}</script>\n<script>window.SOMENTE_LEITURA = true; window.GERADO_EM = ${JSON.stringify(quando.toISOString())}; window.BASE_EMBUTIDA = ${seguro(JSON.stringify(st.base))};</script>`)
+      .replace('<script src="assets/data.js"></script>', () => `<script>${seguro(dadosJs)}</script>`)
+      .replace('<script src="assets/app.js"></script>', () => `<script>${seguro(appJs)}</script>`);
+    if (!html.includes('BASE_EMBUTIDA')) throw new Error('modelo da página mudou');
+    return html;
+  }
+  async function exportarVisualizacao() {
+    const quando = new Date();
+    const html = await htmlVisualizacao(quando);
+    baixar(new Blob([html], { type: 'text/html;charset=utf-8' }), `Gold Frota - visualizacao - ${D.isoDe(quando)}.html`);
+    toast('Arquivo gerado (pasta Downloads). Quem abrir só visualiza: não altera os seus dados.', 6000);
+  }
   function baixar(blob, nome) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 
   // ---------- ajustes ----------
@@ -800,6 +821,8 @@
   function mostrarGit(g) {
     const s = $('#seloGit');
     const set = (cls, txt, tit) => { s.className = 'selo ' + cls; s.lastElementChild.textContent = txt; s.title = tit || txt; };
+    if (st.embutida) return set('ok', 'Somente visualização', 'Arquivo gerado em ' + new Date(window.GERADO_EM || Date.now()).toLocaleString('pt-BR') + '. Os dados não podem ser alterados aqui.');
+    if (st.servidor && !st.podeEditar) return set('alerta', 'Somente visualização', 'Alterações só podem ser feitas no computador do responsável pelo painel.');
     if (!st.servidor) return set('erro', 'Sem servidor', 'Abra pelo "Abrir Painel.bat" para gravar dados');
     if (g && g.detalhe && !g.push && g.commit === false) return set('erro', 'Erro ao salvar', g.detalhe);
     D.statusGit().then(x => {
@@ -845,6 +868,7 @@
       (p.requestFullscreen ? p.requestFullscreen() : Promise.reject()).catch(() => toast('O navegador não permitiu tela cheia'));
     });
     $('#aprPDF').addEventListener('click', () => { renderApresentacao(); toast('Na janela que abrir, escolha "Salvar como PDF"', 5000); setTimeout(() => window.print(), 300); });
+    $('#aprArquivo').addEventListener('click', () => exportarVisualizacao().catch(e => toast('Não consegui gerar o arquivo: ' + e.message, 6000)));
     $('#aprSlides').addEventListener('click', e => { if (document.fullscreenElement && !e.target.closest('button, a')) irSlide(apr.atual + 1); });
     document.addEventListener('keydown', e => {
       if (!$('#tela-apresentacao').classList.contains('ativa') || (e.target.closest && e.target.closest('input, select, textarea'))) return;
@@ -915,17 +939,21 @@
     const { base, origem } = await D.carregar();
     st.base = base;
     st.servidor = origem === 'servidor';
-    $('#avisoServidor').classList.toggle('mostra', !st.servidor);
+    st.embutida = origem === 'embutida';
+    // só edita quem está no computador do servidor; arquivo exportado e acesso pela rede só visualizam
+    st.podeEditar = st.servidor ? ((await D.statusGit()) || {}).podeEditar !== false : false;
+    document.body.classList.toggle('so-leitura', !st.podeEditar);
+    $('#avisoServidor').classList.toggle('mostra', !st.servidor && !st.embutida);
     recalcular();
     mostrarGit();
-    if (!st.base.abastecimentos.length && !st.base.multas.length) {
+    if (st.podeEditar && !st.base.abastecimentos.length && !st.base.multas.length) {
       $$('#abas .aba')[1].click();
       toast('Comece importando as planilhas', 4000);
     }
   }
 
   // Para testes no console: App.importarBuffer(nome, arrayBuffer)
-  window.App = { estado: st, selecionar, limparTudo, importarBuffer: (nome, buf) => importar([new File([buf], nome)]) };
+  window.App = { estado: st, selecionar, limparTudo, htmlVisualizacao, importarBuffer: (nome, buf) => importar([new File([buf], nome)]) };
   if (!window.XLSX || !window.Chart) { document.body.insertAdjacentHTML('afterbegin', '<div class="aviso mostra" style="margin:16px">Não consegui carregar as bibliotecas (sem internet?). O painel precisa de internet para abrir os gráficos e ler as planilhas.</div>'); }
   else iniciar();
 })();

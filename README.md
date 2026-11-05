@@ -79,6 +79,12 @@ Visuais:
 - **Gerar PDF**: abre a impressão do navegador. Escolha "Salvar como PDF" para ter uma página por tela.
 - No Painel, o botão de tela cheia (no topo) aumenta as letras para mostrar na TV, e o período **Semana** tem setas para voltar semanas.
 
+## Quem pode alterar
+
+- **Só o computador onde roda o `Abrir Painel.bat` altera dados** (importar, ajustes, correções). O servidor recusa qualquer alteração vinda de outro lugar.
+- **Arquivo para enviar** (aba Apresentação): gera um `.html` único, somente visualização, com os dados do momento. Quem abrir vê o painel, filtra, usa o mapa e a apresentação, mas não altera nada.
+- **Acesso pela rede (opcional):** rode uma vez `Liberar na rede.bat` como administrador. Depois, a janela do painel mostra o endereço para os colegas (ex.: `http://192.168.0.10:8765/`), que abrem em modo somente visualização enquanto o seu computador estiver com o painel aberto.
+
 ## Regras de cálculo
 
 - **Km válido:** só diesel, com km percorrido > 0 e ≤ 3.000 km (ajustável em Ajustes).

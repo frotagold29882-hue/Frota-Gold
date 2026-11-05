@@ -425,3 +425,9 @@ body.tv .cartao h3 { font-size: 17px; }
   .g-mapa { grid-template-columns: minmax(0, 1fr); }
   .apr-acoes { margin-left: 0; }
 }
+
+/* ================= somente visualização ================= */
+body.so-leitura [data-tela="importar"], body.so-leitura [data-tela="ajustes"],
+body.so-leitura #tela-importar, body.so-leitura #tela-ajustes,
+body.so-leitura #aprArquivo,
+body.so-leitura .at-det input, body.so-leitura .at-det select, body.so-leitura .at-det button { display: none !important; }

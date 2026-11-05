@@ -452,6 +452,7 @@
 
   // ---------- persistência ----------
   async function carregar() {
+    if (window.BASE_EMBUTIDA) return { base: garantir(window.BASE_EMBUTIDA), origem: 'embutida' }; // arquivo de visualização
     try {
       const r = await fetch('api/base', { cache: 'no-store' });
       if (r.ok) { const b = garantir(await r.json()); salvarCache(b); return { base: b, origem: 'servidor' }; }
