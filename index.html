@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="assets/style.css">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 <header class="topo">
@@ -144,10 +145,10 @@
   <!-- ================= IMPORTAR ================= -->
   <section class="tela" id="tela-importar">
     <label class="solta" id="solta">
-      <input type="file" id="arquivos" accept=".xlsx,.xls,.csv" multiple hidden>
+      <input type="file" id="arquivos" accept=".xlsx,.xls,.csv,.pdf" multiple hidden>
       <div class="solta-icone"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg></div>
       <h2>Arraste as planilhas aqui</h2>
-      <p>ou clique para escolher · abastecimentos, multas e cadastro da frota (o tipo é reconhecido sozinho)</p>
+      <p>ou clique para escolher · fatura do TruckPag (CSV), listagem de abastecimentos, multas (planilha ou PDF da infração) e cadastro da frota · o tipo é reconhecido sozinho</p>
     </label>
     <div class="resultado" id="resultado"></div>
 

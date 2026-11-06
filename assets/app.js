@@ -440,6 +440,12 @@
     const A = D.pontosAtencao(st.ctx, ab, mu);
     const itens = [];
     const ufOpts = () => `<option value="">UF…</option>` + D.SIGLAS.map(s => `<option>${s}</option>`).join('');
+    const abertos = A.prazos.filter(p => !p.vencido), vencidos = A.prazos.filter(p => p.vencido);
+    if (A.prazos.length) itens.push({
+      cls: 'crit', ic: '⏰', t: `${abertos.length ? `${abertos.length} prazos de multa nos próximos 10 dias` : ''}${abertos.length && vencidos.length ? ' · ' : ''}${vencidos.length ? `${vencidos.length} vencidos há pouco` : ''}`,
+      s: 'Identificação do condutor e defesa prévia. Vale para todas as multas, não só as do período.',
+      det: `<table><thead><tr><th>Prazo</th><th>O quê</th><th>Placa</th><th>Unidade</th><th>Auto</th><th class="dir">Valor</th></tr></thead><tbody>${A.prazos.map(p => `<tr><td><b style="color:${p.vencido ? 'var(--text-3)' : 'var(--critical)'}">${dBR(p.prazo)}${p.hoje ? ' (hoje)' : p.vencido ? ' (vencido)' : ''}</b></td><td>${esc(p.oQue)}</td><td>${esc(p.multa.placa)}</td><td>${esc(p.multa.unidade)}</td><td>${esc(p.multa.numero)}</td><td class="dir num">${brl(p.multa.valor)}</td></tr>`).join('')}</tbody></table>`
+    });
     if (A.placasSemUnidade.size) itens.push({
       cls: 'crit', ic: '!', t: `${A.placasSemUnidade.size} placas sem unidade`, s: 'Os custos delas aparecem como "SEM UNIDADE". Defina a unidade aqui.',
       det: `<table><thead><tr><th>Placa</th><th>Registros</th><th>Unidade</th><th></th></tr></thead><tbody>${[...A.placasSemUnidade].map(([p, n]) => `<tr><td><b>${esc(p)}</b></td><td>${n}</td><td><input data-placa="${esc(p)}" list="listaUnidades" placeholder="Unidade"></td><td><button class="btn peq" data-acao="unid" data-placa="${esc(p)}">Salvar</button></td></tr>`).join('')}</tbody></table>`
@@ -654,6 +660,8 @@
     // 6. pontos de atenção
     const P = D.pontosAtencao(st.ctx, S.ab, S.mu);
     const it = [];
+    const prazosAbertos = P.prazos.filter(p => !p.vencido);
+    if (prazosAbertos.length) it.push(['crit', '⏰', `${prazosAbertos.length} prazos de multa nos próximos 10 dias`, prazosAbertos.slice(0, 5).map(p => `${dBR(p.prazo).slice(0, 5)}: ${p.oQue.toLowerCase()} · ${p.multa.placa} (${p.multa.unidade})`).join(' · ')]);
     if (P.kmInv.length) it.push(['warn', 'km', `${P.kmInv.length} abastecimentos com hodômetro inválido`, `Ficam fora do R$/km e do km/L. Placas: ${[...new Set(P.kmInv.map(a => a.placa))].slice(0, 8).join(', ')}`]);
     if (P.precoAlto.length) it.push(['info', 'R$', `${P.precoAlto.length} abastecimentos com diesel mais de 15% acima da média`, [...new Set(P.precoAlto.map(a => `${a.posto} (${a.uf})`))].slice(0, 4).join(' · ')]);
     if (I.arlaPct != null && (I.arlaPct < 0.04 || I.arlaPct > 0.07)) it.push(['warn', '%', `Arla em ${pct(I.arlaPct, 1)} do diesel`, 'O normal fica perto de 5%. Vale conferir se algum veículo está rodando sem Arla ou se há lançamento errado.']);
@@ -705,7 +713,7 @@
     for (const f of arquivos) {
       try {
         const buf = await f.arrayBuffer();
-        const r = D.lerArquivo(f.name, buf);
+        const r = await D.lerArquivo(f.name, buf);
         const copia = await D.guardarArquivo(f.name, buf);
         lidos.push({ nome: f.name, tipo: r.tipo, formato: r.formato, registros: r.registros, copia });
       } catch (e) { lidos.push({ nome: f.name, erro: e.message }); }

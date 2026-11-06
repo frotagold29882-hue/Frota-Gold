@@ -243,7 +243,50 @@
     return false;
   }
 
+  /** PDF "Detalhes da Infração" (consulta de infrações do governo federal). O PDF precisa ter texto, não imagem. */
+  async function lerMultaPDF(nome, buffer) {
+    if (!window.pdfjsLib) throw new Error('Leitor de PDF não carregou (sem internet?).');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer.slice(0)) }).promise;
+    let texto = '';
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const c = await (await pdf.getPage(p)).getTextContent();
+      const linhasPdf = {};
+      for (const it of c.items) { const y = Math.round(it.transform[5]); (linhasPdf[y] = linhasPdf[y] || []).push([it.transform[4], it.str]); }
+      texto += Object.keys(linhasPdf).sort((a, b) => b - a).map(y => linhasPdf[y].sort((a, b) => a[0] - b[0]).map(x => x[1]).join(' ')).join('\n') + '\n';
+    }
+    // junta pedaços quebrados pela ligadura "fi" (ex.: "Noti fi cação")
+    const t = texto.replace(/[-]/g, '').replace(/[ \t]+/g, ' ').replace(/\s*fi\s*(?=ca[çc][ãa]o)/gi, 'fi');
+    if (!/N[úu]mero do Auto de Infra[çc][ãa]o/i.test(t)) {
+      if (!t.trim()) throw new Error('O PDF não tem texto (parece imagem escaneada). Lance essa multa na planilha de multas.');
+      throw new Error('PDF não reconhecido. O painel lê o PDF "Detalhes da Infração".');
+    }
+    const pega1 = re => { const m = t.match(re); return m ? m[1].trim() : ''; };
+    const numero = normPlaca(pega1(/N[úu]mero do Auto de Infra[çc][ãa]o\s+([A-Z0-9]+)/i));
+    const dh = t.match(/Cometimento da Infra[çc][ãa]o\s+(\d{2}\/\d{2}\/\d{4})(?:\s+(\d{1,2}:\d{2}))?/i) || [];
+    const valor = num(pega1(/Valor Original\s+R\$\s*([\d.,]+)/i));
+    const desc = (t.match(/Detalhes da Infra[çc][ãa]o\s*\n\s*([^\n]+)/i) || [])[1] || '';
+    const codigo = pega1(/C[óo]digo da Infra[çc][ãa]o\s+([\d\s-]+?)\s*(?:\n|$)/i);
+    const registro = {
+      id: numero || `${data(dh[1])}|${normPlaca(pega1(/Placa[^:]*:\s*([A-Z0-9-]+)/i))}|${valor}`,
+      numero, data: data(dh[1]), hora: dh[2] || '',
+      local: pega1(/Local da Infra[çc][ãa]o\s+([^\n]+)/i),
+      tipo: (desc.trim() + (codigo ? ` (cód. ${codigo.replace(/\s+/g, '')})` : '')).trim(),
+      placa: normPlaca(pega1(/Placa[^:\n]*:\s*([A-Z0-9-]+)/i)), motorista: '',
+      orgao: pega1(/[ÓO]rg[ãa]o Autuador\s+([^\n]+)/i),
+      valor: valor || 0, valorDesc: null,
+      venc: null, financeiro: '', obs: `RENAINF ${pega1(/RENAINF\s+(\d+)/i)}`.trim(),
+      prazoDefesa: data(pega1(/Interposi[çc][ãa]o de Defesa\s+(\d{2}\/\d{2}\/\d{4})/i)),
+      prazoCondutor: data(pega1(/Identifica[çc][ãa]o do\s+(\d{2}\/\d{2}\/\d{4})/i)),
+      notificacao: data(pega1(/Data da Notifica[çc][ãa]o de Autua[çc][ãa]o\s+(\d{2}\/\d{2}\/\d{4})/i)),
+      sic: false, aba: 'PDF da infração'
+    };
+    if (!registro.placa || !registro.data) throw new Error('Não encontrei placa ou data da infração no PDF.');
+    return [registro];
+  }
+
   function lerArquivo(nome, buffer) {
+    if (/\.pdf$/i.test(nome)) return lerMultaPDF(nome, buffer).then(r => ({ tipo: 'multas', registros: r, formato: 'Multa (PDF da infração)' }));
     if (/\.(csv|txt)$/i.test(nome)) {
       let texto = new TextDecoder('utf-8').decode(buffer);
       if (texto.includes('�')) texto = new TextDecoder('windows-1252').decode(buffer);
@@ -447,7 +490,15 @@
     const precos = ab.filter(a => a.combustivel === 'DIESEL' && a.preco && !a.estorno);
     const media = precos.length ? soma(precos, a => a.preco) / precos.length : 0;
     const precoAlto = precos.filter(a => a.preco > media * 1.15);
-    return { kmInv, multasSemUF, placasSemUnidade, forasCadastro, precoAlto, mediaPreco: media };
+    // prazos de multas (de todas, não só do período): defesa prévia e identificação do condutor
+    const hoje = isoDe(new Date()), em10 = isoDe(new Date(Date.now() + 10 * 864e5)), ha30 = isoDe(new Date(Date.now() - 30 * 864e5));
+    const prazos = [];
+    for (const m of ctx.multas) for (const [campo, nomePrazo] of [['prazoCondutor', 'Identificar o condutor'], ['prazoDefesa', 'Defesa prévia']]) {
+      const d = m[campo]; if (!d || d < ha30 || d > em10) continue;
+      prazos.push({ multa: m, prazo: d, oQue: nomePrazo, vencido: d < hoje, hoje: d === hoje });
+    }
+    prazos.sort((a, b) => a.prazo.localeCompare(b.prazo));
+    return { kmInv, multasSemUF, placasSemUnidade, forasCadastro, precoAlto, mediaPreco: media, prazos };
   }
 
   // ---------- persistência ----------
