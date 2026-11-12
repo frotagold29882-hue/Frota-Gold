@@ -80,6 +80,12 @@ Visuais:
 - O centro de custo da Média também dá unidade às placas que não estão no cadastro.
 - Consolidado por posto de poucos dias (semanal) é recusado: para semanas, use a fatura (CSV).
 
+## Aba Relatório (por unidade)
+
+- Escolha a unidade (ou a frota inteira, ou todas as unidades, uma por página), o período (atalhos: última semana, mês passado, este mês, 30 dias, tudo) e as informações: resumo, veículos, motoristas, postos, multas, pontos de atenção e abastecimentos um a um.
+- **Gerar PDF**: documento em pé, pronto para imprimir ou enviar. **Baixar Excel**: uma aba por assunto, com filtros.
+- A comparação com o período anterior só aparece quando a base tem esse período inteiro.
+
 ## Apresentação semanal e TV
 
 - Aba **Apresentação**: 6 telas da semana (segunda a domingo) comparadas com a semana anterior: resumo, mapa, eficiência por unidade, postos e preços, veículos e motoristas, pontos de atenção.

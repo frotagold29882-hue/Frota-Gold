@@ -799,6 +799,144 @@
   }
   const pad2 = n => String(n).padStart(2, '0');
 
+  // ---------- relatório por unidade (PDF e Excel) ----------
+  const rel = { de: '', ate: '', unidade: '' };
+  const TODAS = '__todas__';
+  function relSecoes() { return new Set($$('#relSecoes input:checked').map(i => i.value)); }
+  function relAtalho(tipo) {
+    const fim = ultimaData();
+    if (tipo === 'semana') { const seg = addDias(semanaDe(fim), -7); rel.de = seg; rel.ate = addDias(seg, 6); }
+    if (tipo === 'mes') { const d = new Date(fim.slice(0, 7) + '-01T12:00:00'); d.setMonth(d.getMonth() - 1); rel.de = D.isoDe(d); const f = new Date(d); f.setMonth(f.getMonth() + 1); f.setDate(0); rel.ate = D.isoDe(f); }
+    if (tipo === 'esteMes') { rel.de = fim.slice(0, 8) + '01'; rel.ate = fim; }
+    if (tipo === '30') { rel.de = addDias(fim, -29); rel.ate = fim; }
+    if (tipo === 'tudo') { const ds = st.base.abastecimentos.map(a => a.data).filter(Boolean).sort(); rel.de = ds[0] || fim; rel.ate = fim; }
+    $('#relDe').value = rel.de; $('#relAte').value = rel.ate;
+  }
+
+  /** Calcula tudo de uma unidade (ou da frota inteira) num período. */
+  function dadosRelatorio(unidade, de, ate) {
+    const filtroU = x => !unidade || x.unidade === unidade;
+    const P = D.filtrar(st.ctx, { de, ate });
+    const ab = P.ab.filter(filtroU), mu = P.mu.filter(filtroU);
+    const n = diasEntre(de, ate) + 1, antDe = addDias(de, -n), antAte = addDias(de, -1);
+    const A = D.filtrar(st.ctx, { de: antDe, ate: antAte });
+    const abA = A.ab.filter(filtroU), muA = A.mu.filter(filtroU);
+    // só compara se a base cobre o período anterior inteiro (senão a variação sai falsa)
+    const primeira = st.base.abastecimentos.reduce((m, a) => (a.data && (!m || a.data < m) ? a.data : m), '');
+    const I = D.indicadores(ab, mu), IA = primeira && primeira <= antDe && (abA.length || muA.length) ? D.indicadores(abA, muA) : null;
+    const veic = D.curvaABC(D.porPlaca(ab, mu, st.ctx), p => p.custoTotal);
+    const semDiesel = D.porPlaca(ab, mu, st.ctx).filter(p => !veic.some(v => v.placa === p.placa));
+    const mot = [...D.agrupar([...ab.map(a => ({ m: a.motorista || '(sem nome)', v: a.valor, t: 'c', l: a.litros, p: a.placa })), ...mu.map(m => ({ m: m.motorista || '(sem nome)', v: m.valor, t: 'm', p: m.placa }))], x => x.m).entries()]
+      .map(([m, l]) => ({ motorista: m, comb: D.soma(l.filter(x => x.t === 'c'), x => x.v), multas: D.soma(l.filter(x => x.t === 'm'), x => x.v), qtdMultas: l.filter(x => x.t === 'm').length, abast: l.filter(x => x.t === 'c').length, placas: [...new Set(l.map(x => x.p))].join(', ') }))
+      .map(x => Object.assign(x, { total: x.comb + x.multas })).sort((a, b) => b.total - a.total);
+    const diesel = ab.filter(a => a.combustivel === 'DIESEL');
+    const mediaL = I.rsLitro || 0;
+    const postos = [...D.agrupar(ab, a => a.posto + '|' + a.uf).entries()].map(([k, l]) => {
+      const [posto, uf] = k.split('|'); const ld = l.filter(a => a.combustivel === 'DIESEL'); const L = D.soma(ld, a => a.litros), Vd = D.soma(ld, a => a.valor);
+      return { posto, uf, cidade: l[0].cidade, abast: l.filter(a => !a.estorno).length, litros: L, valor: D.soma(l, a => a.valor), precoDiesel: L ? Vd / L : null, aMais: L && Vd / L > mediaL ? (Vd / L - mediaL) * L : 0 };
+    }).sort((a, b) => b.valor - a.valor);
+    const atencao = D.pontosAtencao(st.ctx, ab, mu);
+    const prazos = atencao.prazos.filter(p => filtroU(p.multa));
+    return { unidade, de, ate, I, IA, antDe, antAte, ab, mu, veic: [...veic, ...semDiesel.map(p => Object.assign(p, { classe: '—' }))], mot, postos, atencao, prazos, diesel };
+  }
+
+  function htmlRelatorio(R, sec) {
+    const titulo = R.unidade ? `Unidade ${esc(R.unidade)}` : 'Frota inteira';
+    const dlt = (a, b, menorMelhor = true) => { if (a == null || b == null || !b) return ''; const v = a / b - 1; if (Math.abs(v) < .005) return 'estável'; const ruim = menorMelhor ? v > 0 : v < 0; return `<span class="${ruim ? 'sobe' : 'desce'}">${v > 0 ? '▲' : '▼'} ${pct(Math.abs(v))}</span>`; };
+    const k = (r, v, d) => `<div class="rel-kpi"><div class="r">${r}</div><div class="v">${v}</div><div class="d">${d || '&nbsp;'}</div></div>`;
+    const { I, IA } = R;
+    const vs = IA ? ` vs ${dBR(R.antDe).slice(0, 5)}–${dBR(R.antAte).slice(0, 5)}` : '';
+    let h = `<article class="rel-pag">
+      <header class="rel-cab"><svg class="logo" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M2 16V7h11v9M13 10h4l4 4v2h-8"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>
+        <div><h1>Relatório · ${titulo}</h1><div class="meta">Período: ${dBR(R.de)} a ${dBR(R.ate)}${IA ? ` · comparado com ${dBR(R.antDe)} a ${dBR(R.antAte)}` : ''}</div></div>
+        <div class="marca">Gold Frota<small>gerado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</small></div></header>`;
+    if (sec.has('resumo')) h += `<h2>Resumo</h2><div class="rel-kpis">
+      ${k('Custo total', brl(I.custoTotal), IA ? dlt(I.custoTotal, IA.custoTotal) + vs : '')}
+      ${k('Diesel', brl(I.custoDiesel), `${fNum(I.litrosDiesel)} litros ${IA ? '· ' + dlt(I.custoDiesel, IA.custoDiesel) : ''}`)}
+      ${k('Arla 32', brl(I.custoArla), `${pct(I.arlaPct, 1)} do diesel (litros)`)}
+      ${k('Multas', brl(I.custoMultas), `${fNum(I.qtdMultas)} infrações`)}
+      ${k('Km rodados (válidos)', fNum(I.km), `${fNum(I.qtdKmInvalido)} de ${fNum(I.qtdDiesel)} com hodômetro inválido`)}
+      ${k('Custo por km', I.rsKm == null ? '—' : fBRL3.format(I.rsKm), IA ? dlt(I.rsKm, IA.rsKm) : '')}
+      ${k('Km por litro', fNum(I.kmL, 2), IA ? dlt(I.kmL, IA.kmL, false) : '')}
+      ${k('Preço médio do diesel', I.rsLitro == null ? '—' : fBRL3.format(I.rsLitro), `${fNum(I.veiculos)} veículos · ${fNum(I.qtdAbast)} abastecimentos`)}
+    </div>`;
+    if (sec.has('veiculos')) h += `<h2>Veículos</h2>${R.veic.length ? `<table><thead><tr><th>Placa</th><th>Modelo</th><th class="dir">Litros diesel</th><th class="dir">Km válidos</th><th class="dir">km/L</th><th class="dir">R$/km</th><th class="dir">Combustível</th><th class="dir">Multas</th><th class="dir">Total</th><th class="dir">% acum.</th></tr></thead><tbody>
+      ${R.veic.map(p => `<tr><td><b>${esc(p.placa)}</b>${R.unidade ? '' : ` <small>${esc(p.unidade)}</small>`}</td><td>${esc(p.modelo)}</td><td class="dir num">${fNum(p.litrosDiesel)}</td><td class="dir num">${fNum(p.km)}</td><td class="dir num ${p.kmL && I.kmL && p.kmL < I.kmL * 0.85 ? 'alerta' : ''}">${fNum(p.kmL, 2)}</td><td class="dir num">${p.rsKm == null ? '—' : fBRL3.format(p.rsKm)}</td><td class="dir num">${brl(p.custoDiesel + p.custoArla + p.custoOutros)}</td><td class="dir num">${p.custoMultas ? brl(p.custoMultas) : '—'}</td><td class="dir num"><b>${brl(p.custoTotal)}</b></td><td class="dir num">${p.acumulado != null ? pct(p.acumulado) : '—'}</td></tr>`).join('')}
+      <tr class="total"><td colspan="2">Total (${fNum(R.veic.length)} veículos)</td><td class="dir num">${fNum(I.litrosDiesel)}</td><td class="dir num">${fNum(I.km)}</td><td class="dir num">${fNum(I.kmL, 2)}</td><td class="dir num">${I.rsKm == null ? '—' : fBRL3.format(I.rsKm)}</td><td class="dir num">${brl(I.custoDiesel + I.custoArla + I.custoOutros)}</td><td class="dir num">${brl(I.custoMultas)}</td><td class="dir num">${brl(I.custoTotal)}</td><td></td></tr></tbody></table>
+      <p class="nota">Em vermelho: km/L mais de 15% abaixo da média do relatório (${fNum(I.kmL, 2)}).</p>` : '<p class="vazio-rel">Sem veículos no período.</p>'}`;
+    if (sec.has('motoristas')) h += `<h2>Motoristas</h2>${R.mot.length ? `<table><thead><tr><th>Motorista</th><th>Placas</th><th class="dir">Abastecimentos</th><th class="dir">Combustível</th><th class="dir">Multas</th><th class="dir">Total</th></tr></thead><tbody>
+      ${R.mot.map(m => `<tr><td>${esc(m.motorista)}</td><td>${esc(m.placas)}</td><td class="dir num">${fNum(m.abast)}</td><td class="dir num">${brl(m.comb)}</td><td class="dir num">${m.qtdMultas ? `${brl(m.multas)} (${m.qtdMultas})` : '—'}</td><td class="dir num"><b>${brl(m.total)}</b></td></tr>`).join('')}</tbody></table>` : '<p class="vazio-rel">Sem motoristas no período.</p>'}`;
+    if (sec.has('postos')) h += `<h2>Postos utilizados</h2>${R.postos.length ? `<table><thead><tr><th>Posto</th><th>Cidade/UF</th><th class="dir">Abast.</th><th class="dir">Litros diesel</th><th class="dir">R$/L diesel</th><th class="dir">Pago a mais*</th><th class="dir">Valor</th></tr></thead><tbody>
+      ${R.postos.map(p => `<tr><td>${esc(p.posto.slice(0, 48))}</td><td>${esc(p.cidade)}/${esc(p.uf)}</td><td class="dir num">${fNum(p.abast)}</td><td class="dir num">${fNum(p.litros)}</td><td class="dir num ${p.precoDiesel && I.rsLitro && p.precoDiesel > I.rsLitro * 1.05 ? 'alerta' : ''}">${p.precoDiesel ? fBRL3.format(p.precoDiesel) : '—'}</td><td class="dir num">${p.aMais ? brl(p.aMais) : '—'}</td><td class="dir num"><b>${brl(p.valor)}</b></td></tr>`).join('')}</tbody></table>
+      <p class="nota">* Diferença em relação ao preço médio do diesel do relatório (${I.rsLitro ? fBRL3.format(I.rsLitro) : '—'}).</p>` : '<p class="vazio-rel">Sem abastecimentos no período.</p>'}`;
+    if (sec.has('multas')) {
+      h += `<h2>Multas</h2>${R.mu.length ? `<table><thead><tr><th>Data</th><th>Placa</th><th>Auto</th><th>Infração</th><th>Local</th><th>UF</th><th class="dir">Valor</th></tr></thead><tbody>
+        ${[...R.mu].sort((a, b) => String(a.data).localeCompare(String(b.data))).map(m => `<tr><td>${dBR(m.data)}</td><td>${esc(m.placa)}</td><td>${esc(m.numero)}</td><td style="white-space:normal">${esc(m.tipo).slice(0, 80)}</td><td style="white-space:normal">${esc(m.local).slice(0, 50)}</td><td>${esc(m.ufCalc)}</td><td class="dir num">${brl(m.valor)}</td></tr>`).join('')}
+        <tr class="total"><td colspan="6">Total (${fNum(R.mu.length)} multas)</td><td class="dir num">${brl(I.custoMultas)}</td></tr></tbody></table>` : '<p class="vazio-rel">Nenhuma multa no período.</p>'}`;
+      if (R.prazos.length) h += `<p class="nota"><b class="alerta">Prazos:</b> ${R.prazos.map(p => `${dBR(p.prazo)} – ${p.oQue.toLowerCase()} (${esc(p.multa.placa)}, auto ${esc(p.multa.numero)})${p.vencido ? ' — vencido' : ''}`).join('; ')}</p>`;
+    }
+    if (sec.has('atencao')) {
+      const A = R.atencao, it = [];
+      if (A.kmInv.length) it.push(`<b>${A.kmInv.length} abastecimentos com hodômetro inválido</b> (fora do R$/km e km/L): ${[...new Set(A.kmInv.map(a => a.placa))].join(', ')}.`);
+      if (A.precoAlto.length) it.push(`<b>${A.precoAlto.length} abastecimentos com diesel mais de 15% acima da média</b>: ${[...new Set(A.precoAlto.map(a => `${a.posto.slice(0, 30)} (${a.uf})`))].slice(0, 5).join('; ')}.`);
+      if (I.arlaPct != null && I.qtdDiesel && (I.arlaPct < 0.04 || I.arlaPct > 0.07)) it.push(`<b>Arla em ${pct(I.arlaPct, 1)} do diesel</b> — o normal fica perto de 5%.`);
+      if (A.placasSemUnidade.size) it.push(`<b>Placas sem unidade:</b> ${[...A.placasSemUnidade.keys()].join(', ')}.`);
+      if (A.multasSemUF.length) it.push(`<b>${A.multasSemUF.length} multas sem estado identificado.</b>`);
+      const piores = R.veic.filter(p => p.kmL && I.kmL && p.kmL < I.kmL * 0.85).map(p => `${p.placa} (${fNum(p.kmL, 2)} km/L)`);
+      if (piores.length) it.push(`<b>Consumo acima do normal:</b> ${piores.join(', ')}.`);
+      h += `<h2>Pontos de atenção</h2>${it.length ? `<ul>${it.map(x => `<li>${x}</li>`).join('')}</ul>` : '<p class="vazio-rel">Nada a destacar no período.</p>'}`;
+    }
+    if (sec.has('lancamentos')) h += `<h2>Abastecimentos um a um</h2>${R.ab.length ? `<table><thead><tr><th>Data</th><th>Placa</th><th>Motorista</th><th>Posto</th><th>UF</th><th>Item</th><th class="dir">Litros</th><th class="dir">R$/L</th><th class="dir">Km</th><th class="dir">Valor</th></tr></thead><tbody>
+      ${[...R.ab].sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora)).map(a => `<tr><td>${dBR(a.data)}</td><td>${esc(a.placa)}</td><td>${esc(a.motorista).slice(0, 28)}</td><td>${esc(a.posto).slice(0, 30)}</td><td>${esc(a.uf)}</td><td>${esc(a.combustivelNome)}</td><td class="dir num">${fNum(a.litros, 1)}</td><td class="dir num">${a.preco == null ? '—' : fBRL3.format(a.preco)}</td><td class="dir num ${a.combustivel === 'DIESEL' && !a.kmValido && !a.estorno ? 'alerta' : ''}">${fNum(a.km)}</td><td class="dir num">${brl(a.valor)}</td></tr>`).join('')}</tbody></table>` : '<p class="vazio-rel">Sem abastecimentos no período.</p>'}`;
+    h += `<div class="rel-rodape"><span>Gold Frota · ${titulo}</span><span>${dBR(R.de)} a ${dBR(R.ate)}</span></div></article>`;
+    return h;
+  }
+
+  function unidadesRelatorio() {
+    return [...new Set([...st.ctx.abast.map(a => a.unidade), ...st.ctx.multas.map(m => m.unidade)])].filter(Boolean).sort();
+  }
+  function renderRelatorio() {
+    if (!rel.de) relAtalho('mes');
+    const us = unidadesRelatorio();
+    const sel = $('#relUnidade');
+    const atual = rel.unidade || sel.value || '';
+    sel.innerHTML = `<option value="">Frota inteira</option><option value="${TODAS}">Todas as unidades (uma por página)</option>` + us.map(u => `<option ${u === atual ? 'selected' : ''}>${esc(u)}</option>`).join('');
+    sel.value = atual;
+    rel.unidade = atual;
+    if (!rel.de || !rel.ate || rel.de > rel.ate) { $('#relDoc').innerHTML = '<div class="cartao vazio">Escolha um período válido.</div>'; return; }
+    const sec = relSecoes();
+    const lista = rel.unidade === TODAS ? us.map(u => dadosRelatorio(u, rel.de, rel.ate)).filter(R => R.ab.length || R.mu.length) : [dadosRelatorio(rel.unidade, rel.de, rel.ate)];
+    $('#relInfo').textContent = rel.unidade === TODAS ? `${lista.length} unidades com movimento no período` : `${fNum(lista[0].ab.length)} abastecimentos e ${fNum(lista[0].mu.length)} multas no período`;
+    $('#relDoc').innerHTML = lista.map(R => htmlRelatorio(R, sec)).join('') || '<div class="cartao vazio">Nenhuma unidade com movimento no período.</div>';
+  }
+
+  function excelRelatorio() {
+    const us = unidadesRelatorio();
+    const lista = rel.unidade === TODAS ? us.map(u => dadosRelatorio(u, rel.de, rel.ate)).filter(R => R.ab.length || R.mu.length) : [dadosRelatorio(rel.unidade, rel.de, rel.ate)];
+    const sec = relSecoes();
+    const wb = XLSX.utils.book_new();
+    const add = (nome, cab, linhas, larg) => { const ws = XLSX.utils.aoa_to_sheet([cab, ...linhas]); ws['!cols'] = (larg || cab.map(() => 14)).map(w => ({ wch: w })); ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: linhas.length, c: cab.length - 1 } }) }; XLSX.utils.book_append_sheet(wb, ws, nome); };
+    const r2 = v => (v == null || !isFinite(v) ? null : Math.round(v * 100) / 100);
+    const r3 = v => (v == null || !isFinite(v) ? null : Math.round(v * 1000) / 1000);
+    const U = R => R.unidade || 'FROTA INTEIRA';
+    if (sec.has('resumo')) add('Resumo', ['Unidade', 'De', 'Até', 'Custo total', 'Diesel', 'Litros diesel', 'Arla', 'Multas', 'Qtd multas', 'Km válidos', 'R$/km', 'km/L', 'R$/L diesel', 'Veículos', 'Abastecimentos', 'Custo total período anterior', 'Variação %'],
+      lista.map(R => [U(R), dBR(R.de), dBR(R.ate), r2(R.I.custoTotal), r2(R.I.custoDiesel), r2(R.I.litrosDiesel), r2(R.I.custoArla), r2(R.I.custoMultas), R.I.qtdMultas, R.I.km, r3(R.I.rsKm), r2(R.I.kmL), r3(R.I.rsLitro), R.I.veiculos, R.I.qtdAbast, R.IA ? r2(R.IA.custoTotal) : null, R.IA && R.IA.custoTotal ? r2((R.I.custoTotal / R.IA.custoTotal - 1) * 100) : null]), [18, 11, 11, 13, 13, 12, 10, 10, 9, 10, 8, 7, 9, 9, 13, 16, 10]);
+    if (sec.has('veiculos')) add('Veículos', ['Unidade', 'Placa', 'Modelo', 'Litros diesel', 'Km válidos', 'km/L', 'R$/km', 'Combustível', 'Multas', 'Total'],
+      lista.flatMap(R => R.veic.map(p => [p.unidade, p.placa, p.modelo, r2(p.litrosDiesel), p.km, r2(p.kmL), r3(p.rsKm), r2(p.custoDiesel + p.custoArla + p.custoOutros), r2(p.custoMultas), r2(p.custoTotal)])), [16, 10, 22, 12, 10, 7, 8, 12, 10, 12]);
+    if (sec.has('motoristas')) add('Motoristas', ['Unidade', 'Motorista', 'Placas', 'Abastecimentos', 'Combustível', 'Multas', 'Qtd multas', 'Total'],
+      lista.flatMap(R => R.mot.map(m => [U(R), m.motorista, m.placas, m.abast, r2(m.comb), r2(m.multas), m.qtdMultas, r2(m.total)])), [16, 32, 22, 13, 12, 10, 9, 12]);
+    if (sec.has('postos')) add('Postos', ['Unidade', 'Posto', 'Cidade', 'UF', 'Abastecimentos', 'Litros diesel', 'R$/L diesel', 'Pago a mais vs média', 'Valor'],
+      lista.flatMap(R => R.postos.map(p => [U(R), p.posto, p.cidade, p.uf, p.abast, r2(p.litros), r3(p.precoDiesel), r2(p.aMais), r2(p.valor)])), [16, 44, 16, 5, 13, 12, 10, 16, 12]);
+    if (sec.has('multas')) add('Multas', ['Unidade', 'Data', 'Placa', 'Auto', 'Infração', 'Local', 'UF', 'Órgão', 'Valor', 'Prazo condutor', 'Prazo defesa'],
+      lista.flatMap(R => R.mu.map(m => [m.unidade, dBR(m.data), m.placa, m.numero, m.tipo, m.local, m.ufCalc, m.orgao, r2(m.valor), dBR(m.prazoCondutor), dBR(m.prazoDefesa)])), [16, 11, 10, 13, 40, 36, 5, 24, 10, 13, 12]);
+    if (sec.has('lancamentos')) add('Abastecimentos', ['Unidade', 'Data', 'Hora', 'Placa', 'Motorista', 'Posto', 'Cidade', 'UF', 'Item', 'Litros', 'R$/L', 'Km', 'Km válido', 'Valor', 'Transação'],
+      lista.flatMap(R => R.ab.map(a => [a.unidade, dBR(a.data), a.hora, a.placa, a.motorista, a.posto, a.cidade, a.uf, a.combustivelNome, r2(a.litros), r3(a.preco), a.km, a.kmValido ? 'Sim' : 'Não', r2(a.valor), a.id])), [16, 11, 6, 10, 30, 36, 16, 5, 16, 9, 8, 8, 9, 11, 12]);
+    if (!wb.SheetNames.length) { toast('Marque pelo menos uma informação para incluir'); return; }
+    const nomeU = rel.unidade === TODAS ? 'todas as unidades' : (rel.unidade || 'frota inteira');
+    XLSX.writeFile(wb, `Relatório Gold Frota - ${nomeU} - ${dBR(rel.de).replace(/\//g, '-')} a ${dBR(rel.ate).replace(/\//g, '-')}.xlsx`);
+    toast('Excel gerado (pasta Downloads)');
+  }
+
   // ---------- gravação segura ----------
   async function alterar(mudanca, mensagem) {
     if (!st.podeEditar) { toast(st.servidor ? 'Somente visualização: alterações só no computador do responsável.' : 'Somente visualização.'); return false; }
@@ -977,6 +1115,7 @@
     renderAjusteMapa();
     if ($('#tela-apresentacao').classList.contains('ativa')) renderApresentacao();
     if ($('#tela-mes').classList.contains('ativa')) renderMes();
+    if ($('#tela-relatorio').classList.contains('ativa')) renderRelatorio();
   }
 
   function ligar() {
@@ -988,7 +1127,21 @@
       if (b.dataset.tela === 'apresentacao') renderApresentacao();
       if (b.dataset.tela === 'ajustes') renderAjusteMapa();
       if (b.dataset.tela === 'mes') renderMes();
+      if (b.dataset.tela === 'relatorio') renderRelatorio();
     }));
+    // relatório por unidade
+    $('#relUnidade').addEventListener('change', e => { rel.unidade = e.target.value; renderRelatorio(); });
+    $('#relDe').addEventListener('change', e => { rel.de = e.target.value; renderRelatorio(); });
+    $('#relAte').addEventListener('change', e => { rel.ate = e.target.value; renderRelatorio(); });
+    $$('#relAtalhos button').forEach(b => b.addEventListener('click', () => { relAtalho(b.dataset.r); renderRelatorio(); }));
+    $$('#relSecoes input').forEach(i => i.addEventListener('change', renderRelatorio));
+    $('#relPDF').addEventListener('click', () => {
+      renderRelatorio();
+      document.body.classList.add('print-rel');
+      toast('Na janela que abrir, escolha "Salvar como PDF"', 5000);
+      setTimeout(() => { window.print(); document.body.classList.remove('print-rel'); }, 300);
+    });
+    $('#relExcel').addEventListener('click', () => { try { excelRelatorio(); } catch (e) { toast('Não consegui gerar o Excel: ' + e.message, 6000); } });
     // mês
     $('#mesSel').addEventListener('change', e => { st.mesAba = e.target.value; st.mesUnid = ''; renderMes(); });
     $('#mesUnid').addEventListener('change', e => { st.mesUnid = e.target.value; renderMes(); });

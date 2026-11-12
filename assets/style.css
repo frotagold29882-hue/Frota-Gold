@@ -411,7 +411,8 @@ body.tv .cartao h3 { font-size: 17px; }
 
 /* PDF: uma tela por página, paisagem */
 @media print {
-  @page { size: A4 landscape; margin: 8mm; }
+  @page slides { size: A4 landscape; margin: 8mm; }
+  .slide { page: slides; }
   body { background: #fff; }
   .topo, .apr-barra, .apr-nav, .aviso, .toast, .tela:not(#tela-apresentacao) { display: none !important; }
   #tela-apresentacao { display: block !important; }
@@ -431,3 +432,50 @@ body.so-leitura [data-tela="importar"], body.so-leitura [data-tela="ajustes"],
 body.so-leitura #tela-importar, body.so-leitura #tela-ajustes,
 body.so-leitura #aprArquivo,
 body.so-leitura .at-det input, body.so-leitura .at-det select, body.so-leitura .at-det button { display: none !important; }
+
+/* ================= relatório por unidade ================= */
+.rel-controles { display: grid; gap: 12px; margin-bottom: 16px; }
+.rel-linha { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.rel-secoes label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; background: var(--surface-2); padding: 5px 10px; border-radius: 999px; cursor: pointer; }
+.rel-secoes input { accent-color: var(--accent); margin: 0; }
+.rel-doc { display: grid; gap: 18px; }
+.rel-pag { background: #fff; color: #111; border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; box-shadow: var(--shadow); font-size: 12.5px; }
+.rel-pag + .rel-pag { break-before: page; page-break-before: always; }
+.rel-cab { display: flex; align-items: flex-start; gap: 14px; border-bottom: 2px solid #eb6834; padding-bottom: 12px; margin-bottom: 16px; }
+.rel-cab .logo { color: #eb6834; flex: none; }
+.rel-cab h1 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.rel-cab .meta { color: #555; font-size: 12px; margin-top: 2px; }
+.rel-cab .marca { margin-left: auto; text-align: right; font-weight: 700; color: #333; }
+.rel-cab .marca small { display: block; font-weight: 400; color: #777; }
+.rel-pag h2 { font-size: 14px; margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e3e2dc; color: #222; break-after: avoid; }
+.rel-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.rel-kpi { border: 1px solid #e3e2dc; border-radius: 8px; padding: 8px 10px; break-inside: avoid; }
+.rel-kpi .r { color: #555; font-size: 11px; }
+.rel-kpi .v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 2px 0; }
+.rel-kpi .d { font-size: 11px; color: #777; }
+.rel-kpi .d .sobe { color: #c62828; font-weight: 700; }
+.rel-kpi .d .desce { color: #1b7d1b; font-weight: 700; }
+.rel-pag table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.rel-pag th { background: #f4f4f1; color: #333; font-size: 11px; padding: 5px 6px; border-bottom: 1px solid #ddd; cursor: default; white-space: nowrap; text-align: left; }
+.rel-pag td { padding: 4px 6px; border-bottom: 1px solid #eee; white-space: nowrap; }
+.rel-pag tr { break-inside: avoid; }
+.rel-pag .dir { text-align: right; }
+.rel-pag .num { font-variant-numeric: tabular-nums; }
+.rel-pag .total td { font-weight: 700; background: #fafaf8; border-top: 1px solid #ccc; }
+.rel-pag .alerta { color: #c62828; font-weight: 600; }
+.rel-pag .nota { color: #666; font-size: 11px; margin: 6px 0 0; }
+.rel-pag .vazio-rel { color: #888; font-style: italic; padding: 6px 0; }
+.rel-pag ul { margin: 4px 0; padding-left: 18px; }
+.rel-pag li { margin: 3px 0; }
+.rel-rodape { margin-top: 18px; padding-top: 8px; border-top: 1px solid #e3e2dc; color: #888; font-size: 10.5px; display: flex; justify-content: space-between; }
+
+@media print {
+  body.print-rel #tela-apresentacao { display: none !important; }
+  body.print-rel #tela-relatorio { display: block !important; }
+  body.print-rel .rel-controles { display: none !important; }
+  body.print-rel .rel-doc { display: block; }
+  body.print-rel .rel-pag { border: 0; box-shadow: none; border-radius: 0; padding: 0; }
+  @page relatorio { size: A4 portrait; margin: 12mm; }
+  .rel-pag { page: relatorio; }
+}
+@media (max-width: 860px) { .rel-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rel-pag { padding: 18px; } }

@@ -22,6 +22,7 @@
       <button class="aba" data-tela="mes">Mês</button>
       <button class="aba" data-tela="importar">Importar</button>
       <button class="aba" data-tela="dados">Dados</button>
+      <button class="aba" data-tela="relatorio">Relatório</button>
       <button class="aba" data-tela="apresentacao">Apresentação</button>
       <button class="aba" data-tela="ajustes">Ajustes</button>
     </nav>
@@ -212,6 +213,40 @@
         <div class="cartao"><h3>Todos os veículos do mês</h3><p class="sub">Clique no título da coluna para ordenar</p><div class="tabela-wrap tabela-alta"><table id="mesTabela"></table></div></div>
       </div>
     </div>
+  </section>
+
+  <!-- ================= RELATÓRIO POR UNIDADE ================= -->
+  <section class="tela" id="tela-relatorio">
+    <div class="rel-controles cartao">
+      <div class="rel-linha">
+        <label class="campo">Unidade <select id="relUnidade"></select></label>
+        <label class="campo">De <input type="date" id="relDe"></label>
+        <label class="campo">Até <input type="date" id="relAte"></label>
+        <div class="seg" id="relAtalhos">
+          <button data-r="semana">Última semana</button>
+          <button data-r="mes">Mês passado</button>
+          <button data-r="esteMes">Este mês</button>
+          <button data-r="30">30 dias</button>
+          <button data-r="tudo">Tudo</button>
+        </div>
+      </div>
+      <div class="rel-linha rel-secoes" id="relSecoes">
+        <span class="contador">Incluir:</span>
+        <label><input type="checkbox" value="resumo" checked> Resumo</label>
+        <label><input type="checkbox" value="veiculos" checked> Veículos</label>
+        <label><input type="checkbox" value="motoristas" checked> Motoristas</label>
+        <label><input type="checkbox" value="postos" checked> Postos</label>
+        <label><input type="checkbox" value="multas" checked> Multas</label>
+        <label><input type="checkbox" value="atencao" checked> Pontos de atenção</label>
+        <label><input type="checkbox" value="lancamentos"> Abastecimentos um a um</label>
+      </div>
+      <div class="rel-linha">
+        <button class="btn prim" id="relPDF">Gerar PDF</button>
+        <button class="btn" id="relExcel">Baixar Excel</button>
+        <span class="contador" id="relInfo"></span>
+      </div>
+    </div>
+    <div class="rel-doc" id="relDoc"></div>
   </section>
 
   <!-- ================= APRESENTAÇÃO ================= -->
