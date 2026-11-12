@@ -38,6 +38,8 @@
   const semAcento = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '');
   const chaveTexto = s => semAcento(s).toUpperCase().replace(/\s+/g, ' ').trim();
   const normPlaca = s => String(s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // placa brasileira: antiga (ABC1234) ou Mercosul (ABC1D23). Evita ler legendas/observações da planilha como veículo.
+  const placaValida = p => /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(p);
   function normUnidade(s) {
     const u = chaveTexto(s);
     if (!u || u === 'NAO INFORMADA' || u === 'NAO INFORMADO' || u === '-') return SEM_UNIDADE;
@@ -178,7 +180,7 @@
       const out = [];
       for (const r of rows.slice(h.i + 1)) {
         const placa = normPlaca(pega(r, C.placa));
-        if (!placa || placa.length < 6) continue;
+        if (!placaValida(placa)) continue;
         out.push({ placa, unidade: normUnidade(pega(r, C.unidade)), situacao: String(pega(r, C.situacao) ?? '').trim(), modelo: String(pega(r, C.modelo) ?? '').trim(), tipo: String(pega(r, C.tipo) ?? '').trim() });
       }
       return out;
@@ -295,7 +297,7 @@
       const out = [];
       for (const r of rows.slice(h.i + 1)) {
         const placa = normPlaca(pega(r, C.placa));
-        if (!placa || placa.length < 6) continue;
+        if (!placaValida(placa)) continue;
         const centro = String(pega(r, C.centro) ?? '').trim();
         const media = num(pega(r, C.media));
         out.push({ placa, frota: String(pega(r, C.frota) ?? '').trim(), unidade: /^null$/i.test(centro) || !centro ? '' : normUnidade(centro),
@@ -419,7 +421,7 @@
 
   // ---------- regras de negócio ----------
   function contexto(base) {
-    const frota = new Map(base.frota.map(f => [f.placa, f]));
+    const frota = new Map(base.frota.filter(f => placaValida(f.placa)).map(f => [f.placa, f]));
     const aj = base.ajustes;
     // centro de custo dos relatórios mensais de média: só vale quando a placa não tem unidade no ajuste nem no cadastro
     const centroCusto = new Map();
@@ -608,7 +610,7 @@
   async function statusGit() { try { const r = await fetch('api/status', { cache: 'no-store' }); return r.ok ? await r.json() : null; } catch (e) { return null; } }
 
   window.Dados = {
-    SEM_UNIDADE, LOCAL_UNIDADES, UFS, NOMES_UF, SIGLAS: [...SIGLAS].sort(),
+    SEM_UNIDADE, LOCAL_UNIDADES, placaValida, UFS, NOMES_UF, SIGLAS: [...SIGLAS].sort(),
     lerArquivo, baseVazia, garantir, mesclar, atualizarResumo,
     contexto, filtrar, indicadores, porUnidade, porPlaca, curvaABC, evolucao, pontosAtencao, agrupar, soma,
     carregar, gravar, guardarArquivo, statusGit, salvarCache, normPlaca, normUnidade, isoDe

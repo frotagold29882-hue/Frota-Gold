@@ -869,7 +869,7 @@
     $('#resumoBase').innerHTML = `<div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr));margin:0">
       ${kpi('Abastecimentos', fNum(b.abastecimentos.length), datas.length ? `${dBR(datas[0])} a ${dBR(datas.at(-1))}` : 'nenhum ainda')}
       ${kpi('Multas', fNum(b.multas.length), datasM.length ? `${dBR(datasM[0])} a ${dBR(datasM.at(-1))}` : 'nenhuma ainda')}
-      ${kpi('Veículos', fNum(b.frota.length), 'no cadastro')}</div>
+      ${kpi('Veículos', fNum(b.frota.filter(f => D.placaValida(f.placa)).length), 'no cadastro')}</div>
       <p class="sub" style="margin-top:12px">Última gravação: ${r.atualizado ? new Date(r.atualizado).toLocaleString('pt-BR') : '—'}</p>`;
     const imp = [...b.importacoes].reverse();
     $('#tabImport').innerHTML = imp.length ? `<thead><tr><th>Quando</th><th>Arquivo</th><th class="dir">Lidos</th><th class="dir">Novos</th></tr></thead><tbody>${imp.slice(0, 40).map(i => `<tr title="${esc(i.copia || '')}"><td>${new Date(i.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</td><td>${esc(i.arquivo)}</td><td class="dir num">${fNum(i.lidos)}</td><td class="dir num">${fNum(i.novos)}</td></tr>`).join('')}</tbody>` : `<tr><td class="vazio">Nenhuma importação ainda</td></tr>`;
@@ -886,7 +886,7 @@
       cols: [['data', 'Data', dBR], ['placa', 'Placa'], ['unidade', 'Unidade'], ['ufCalc', 'UF'], ['local', 'Local'], ['tipo', 'Infração'], ['numero', 'Nº'], ['motorista', 'Motorista'], ['orgao', 'Órgão'], ['valor', 'Valor', brl, 1], ['venc', 'Vencimento', dBR], ['aba', 'Aba']]
     },
     frota: {
-      lista: () => st.base.frota.map(f => Object.assign({}, f, { unidadeFinal: st.ctx.unidadePlaca(f.placa) })),
+      lista: () => st.base.frota.filter(f => D.placaValida(f.placa)).map(f => Object.assign({}, f, { unidadeFinal: st.ctx.unidadePlaca(f.placa) })),
       cols: [['placa', 'Placa'], ['unidadeFinal', 'Unidade'], ['situacao', 'Situação'], ['tipo', 'Tipo'], ['modelo', 'Modelo']]
     },
     abc: {
