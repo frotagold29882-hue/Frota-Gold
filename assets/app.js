@@ -685,6 +685,120 @@
     $$('#aprPontos button').forEach((b, k) => b.classList.toggle('ativo', k === apr.atual));
   }
 
+  // ---------- mês: relatórios mensais do TruckPag ----------
+  const NOME_MES = ['', 'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const rotMes = m => `${NOME_MES[+m.slice(5)]} de ${m.slice(0, 4)}`;
+  const ordemMes = { col: 'valor', dir: -1 };
+  function renderMes() {
+    const R = st.base.resumos || { postos: {}, veiculos: {} };
+    const meses = [...new Set([...Object.keys(R.postos || {}), ...Object.keys(R.veiculos || {})])].sort().reverse();
+    $('#mesVazio').hidden = meses.length > 0;
+    $('#mesConteudo').hidden = !meses.length;
+    if (!meses.length) return;
+    if (!st.mesAba || !meses.includes(st.mesAba)) st.mesAba = meses[0];
+    $('#mesSel').innerHTML = meses.map(m => `<option value="${m}" ${m === st.mesAba ? 'selected' : ''}>${rotMes(m)}</option>`).join('');
+    const P = R.postos?.[st.mesAba], V = R.veiculos?.[st.mesAba];
+    $('#mesFontes').textContent = [P ? `Por posto: ${P.arquivo}` : 'Falta o consolidado por posto deste mês', V ? `Por veículo: ${V.arquivo}` : 'Falta a média por veículo deste mês'].join(' · ');
+
+    // veículos com unidade (centro de custo do relatório → senão cadastro/ajuste)
+    const veic = (V?.linhas || []).map(v => Object.assign({}, v, { unidade: v.unidade || st.ctx.unidadePlaca(v.placa) }));
+    const unidades = [...new Set(veic.map(v => v.unidade))].sort();
+    if (st.mesUnid && !unidades.includes(st.mesUnid)) st.mesUnid = '';
+    $('#mesUnid').innerHTML = `<option value="">Todas</option>` + unidades.map(u => `<option ${u === st.mesUnid ? 'selected' : ''}>${esc(u)}</option>`).join('');
+    const vf = st.mesUnid ? veic.filter(v => v.unidade === st.mesUnid) : veic;
+    const postos = P?.linhas || [];
+
+    // indicadores
+    const totPostos = D.soma(postos, p => p.valor), dieselP = postos.filter(p => p.combustivel === 'DIESEL');
+    const LdP = D.soma(dieselP, p => p.litros), VdP = D.soma(dieselP, p => p.valor), arlaP = D.soma(postos.filter(p => p.combustivel === 'ARLA'), p => p.valor);
+    const totVeic = D.soma(vf, v => v.valor), litVeic = D.soma(vf, v => v.litros);
+    const maior = [...vf].sort((a, b) => b.valor - a.valor)[0];
+    $('#mesKpis').innerHTML = (st.mesUnid ? [
+      kpi(`Gasto de ${esc(st.mesUnid)}`, brlCurto(totVeic), `${fNum(vf.length)} veículos · ${pct(totVeic / (D.soma(veic, v => v.valor) || 1))} da frota`, null, 'destaque'),
+      kpi('Litros', fNum(litVeic), 'combustível + Arla'),
+      kpi('Preço médio', litVeic ? fBRL3.format(totVeic / litVeic) : '—', 'por litro (todos os itens)'),
+      kpi('Maior gasto', maior ? esc(maior.placa) : '—', maior ? brl(maior.valor) : ''),
+      kpi('Média do maior', maior?.media ? fNum(maior.media, 2) + ' km/L' : '—', maior ? esc(maior.modelo) : ''),
+      kpi('Veículos sem média', fNum(vf.filter(v => !v.media).length), 'sem km/L no relatório')
+    ] : [
+      kpi('Gasto do mês', brlCurto(P ? totPostos : totVeic), P ? `${fNum(D.soma(postos, p => p.transacoes))} abastecimentos · ${fNum(new Set(postos.map(p => p.posto)).size)} postos` : 'pelo relatório de médias', null, 'destaque'),
+      kpi('Diesel', P ? brlCurto(VdP) : '—', P ? `${fNum(LdP)} litros` : ''),
+      kpi('Preço médio do diesel', LdP ? fBRL3.format(VdP / LdP) : '—', 'por litro no mês'),
+      kpi('Arla 32', P ? brlCurto(arlaP) : '—', P && VdP ? `${pct(arlaP / (VdP + arlaP), 1)} do gasto` : ''),
+      kpi('Veículos', fNum(veic.length), V ? `${fNum(unidades.length)} unidades` : 'falta a média por veículo'),
+      kpi('Maior gasto', maior ? esc(maior.placa) : '—', maior ? `${brl(maior.valor)} · ${esc(maior.unidade)}` : '')
+    ]).join('');
+
+    // maiores gastos por veículo
+    const topV = [...vf].sort((a, b) => b.valor - a.valor).slice(0, 15);
+    const maxV = topV[0]?.valor || 1;
+    $('#mesVeicSub').textContent = st.mesUnid ? `Só ${st.mesUnid} · top ${topV.length}` : `Top ${topV.length} de ${veic.length} veículos · toque numa unidade (ao lado) para filtrar`;
+    $('#mesVeic').innerHTML = topV.length ? topV.map(v => `<div class="barra" title="${esc(v.placa)} · ${esc(v.modelo)} · ${fNum(v.litros)} L${v.media ? ' · ' + fNum(v.media, 2) + ' km/L' : ''}">
+      <span class="nome"><span class="unid-cor" style="background:${corUnidade(v.unidade)}"></span><b>${esc(v.placa)}</b> <small style="color:var(--text-3)">${esc(v.unidade)}</small></span>
+      <span class="trilho"><span style="width:${(v.valor / maxV) * 100}%;background:${corUnidade(v.unidade)}"></span></span>
+      <span class="val">${brl(v.valor)}</span></div>`).join('') : '<div class="vazio">Falta o relatório de médias deste mês</div>';
+
+    // por unidade
+    const porU = [...D.agrupar(veic, v => v.unidade).entries()].map(([u, l]) => ({ u, valor: D.soma(l, v => v.valor), n: l.length })).sort((a, b) => b.valor - a.valor);
+    const maxU = porU[0]?.valor || 1, totU = D.soma(porU, x => x.valor) || 1;
+    $('#mesUnidades').innerHTML = porU.length ? porU.map(x => `<div class="barra ${st.mesUnid ? (st.mesUnid === x.u ? 'marcado' : 'apagado') : ''}" data-u="${esc(x.u)}" title="${fNum(x.n)} veículos">
+      <span class="nome"><span class="unid-cor" style="background:${corUnidade(x.u)}"></span>${esc(x.u)}</span>
+      <span class="trilho"><span style="width:${(x.valor / maxU) * 100}%;background:${corUnidade(x.u)}"></span></span>
+      <span class="val">${brlCurto(x.valor)} <small style="color:var(--text-3)">${pct(x.valor / totU)}</small></span></div>`).join('') : '<div class="vazio">Falta o relatório de médias deste mês</div>';
+    $$('#mesUnidades .barra').forEach(b => b.addEventListener('click', () => { st.mesUnid = st.mesUnid === b.dataset.u ? '' : b.dataset.u; renderMes(); }));
+
+    // mapa
+    const ufVal = new Map(); for (const p of postos) if (p.uf) ufVal.set(p.uf, (ufVal.get(p.uf) || 0) + p.valor);
+    const bolhas = porU.filter(x => x.u !== D.SEM_UNIDADE).map(x => ({ unidade: x.u, valor: x.valor }));
+    const el = $('#mesMapa');
+    el.innerHTML = svgMapa({ ufVal, bolhas, selUnid: new Set(st.mesUnid ? [st.mesUnid] : []) }) + legendaMapa(ufVal, bolhas.filter(b => !localUnidade(b.unidade)));
+    ligarDicas(el);
+    el.querySelectorAll('.bolha').forEach(g => g.addEventListener('click', () => { st.mesUnid = st.mesUnid === g.dataset.unidade ? '' : g.dataset.unidade; renderMes(); }));
+
+    // por posto
+    const porPosto = [...D.agrupar(postos, p => p.posto + '|' + p.uf).entries()].map(([k, l]) => { const [posto, uf] = k.split('|'); return { posto, uf, cidade: l[0].cidade, valor: D.soma(l, p => p.valor), tr: D.soma(l, p => p.transacoes) }; }).sort((a, b) => b.valor - a.valor);
+    const topP = porPosto.slice(0, 12), maxP = topP[0]?.valor || 1;
+    $('#mesPostos').innerHTML = topP.length ? topP.map(p => `<div class="barra" title="${esc(p.posto)} · ${esc(p.cidade)}/${esc(p.uf)} · ${fNum(p.tr)} abastecimentos">
+      <span class="nome">${esc(p.posto.replace(/\s*[-|].*$/, '').slice(0, 34))} <small style="color:var(--text-3)">${esc(p.uf)}</small></span>
+      <span class="trilho"><span style="width:${(p.valor / maxP) * 100}%;background:var(--s1)"></span></span>
+      <span class="val">${brlCurto(p.valor)}</span></div>`).join('') : '<div class="vazio">Falta o consolidado por posto deste mês</div>';
+
+    // diesel mais caro por posto
+    const mediaD = LdP ? VdP / LdP : 0;
+    const caros = dieselP.filter(p => p.litros > 0).map(p => ({ ...p, pl: p.valor / p.litros })).sort((a, b) => b.pl - a.pl).slice(0, 10);
+    $('#mesPrecos').innerHTML = caros.length ? `<thead><tr><th>Posto</th><th>UF</th><th class="dir">Litros</th><th class="dir">R$/L</th><th class="dir">vs média</th><th class="dir">A mais</th></tr></thead><tbody>${caros.map(p => `<tr><td title="${esc(p.posto)}">${esc(p.posto.replace(/\s*[-|].*$/, '').slice(0, 30))}</td><td>${esc(p.uf)}</td><td class="dir num">${fNum(p.litros)}</td><td class="dir num"><b>${fBRL3.format(p.pl)}</b></td><td class="dir">${p.pl > mediaD ? `<span class="chip ruim">+${fBRL3.format(p.pl - mediaD)}</span>` : `<span class="chip bom">${fBRL3.format(p.pl - mediaD)}</span>`}</td><td class="dir num">${p.pl > mediaD ? brl((p.pl - mediaD) * p.litros) : '—'}</td></tr>`).join('')}</tbody>` : '<tr><td class="vazio">Falta o consolidado por posto deste mês</td></tr>';
+
+    // conferência: relatórios × lançamentos do painel
+    const [ano, mes] = st.mesAba.split('-').map(Number);
+    const diasMes = new Date(ano, mes, 0).getDate();
+    const lanc = st.ctx.abast.filter(a => a.data && a.data.startsWith(st.mesAba));
+    const totLanc = D.soma(lanc, a => a.valor);
+    const comDado = new Set(lanc.map(a => a.data));
+    const faltam = []; let ini = null;
+    for (let d = 1; d <= diasMes + 1; d++) {
+      const iso = `${st.mesAba}-${pad2(d)}`, vazio = d <= diasMes && !comDado.has(iso) && iso <= D.isoDe(new Date());
+      if (vazio && !ini) ini = d; if (!vazio && ini) { faltam.push(ini === d - 1 ? `${pad2(ini)}` : `${pad2(ini)} a ${pad2(d - 1)}`); ini = null; }
+    }
+    const base = P ? totPostos : totVeic;
+    $('#mesConf').innerHTML = `<table><tbody>
+      <tr><td>Consolidado por posto</td><td class="dir num"><b>${P ? brl(totPostos) : '—'}</b></td></tr>
+      <tr><td>Média por veículo (soma)</td><td class="dir num"><b>${V ? brl(D.soma(veic, v => v.valor)) : '—'}</b></td></tr>
+      <tr><td>Lançamentos importados no painel</td><td class="dir num"><b>${brl(totLanc)}</b> <small style="color:var(--text-3)">${base ? pct(totLanc / base) + ' do mês' : ''}</small></td></tr>
+    </tbody></table>
+    <p class="sub" style="margin-top:10px">${faltam.length ? `<b style="color:var(--critical)">Dias sem lançamentos no painel:</b> ${faltam.join(', ')}/${pad2(mes)}. Importe a fatura (CSV) desses dias para o painel por dia/placa ficar completo.` : 'Todos os dias do mês têm lançamentos no painel.'}</p>`;
+
+    // tabela completa
+    const cols = [['placa', 'Placa'], ['unidade', 'Unidade'], ['modelo', 'Modelo'], ['litros', 'Litros', 1], ['media', 'km/L', 1], ['ultimoKm', 'Último km', 1], ['valor', 'Valor', 1]];
+    const lista = [...vf].sort((a, b) => { const x = a[ordemMes.col], y = b[ordemMes.col]; return typeof x === 'string' || typeof y === 'string' ? ordemMes.dir * String(x ?? '').localeCompare(String(y ?? '')) : ordemMes.dir * ((x ?? -Infinity) - (y ?? -Infinity)); });
+    const medFrota = D.soma(veic.filter(v => v.media), v => v.media) / (veic.filter(v => v.media).length || 1);
+    $('#mesTabela').innerHTML = `<thead><tr>${cols.map(([k, n, d]) => `<th data-c="${k}" class="${d ? 'dir' : ''}">${n}${ordemMes.col === k ? (ordemMes.dir < 0 ? ' ↓' : ' ↑') : ''}</th>`).join('')}</tr></thead><tbody>${lista.map(v => `<tr>
+      <td><b>${esc(v.placa)}</b></td><td><span class="unid-cor" style="background:${corUnidade(v.unidade)}"></span>${esc(v.unidade)}</td><td style="color:var(--text-2)">${esc(v.modelo)}</td>
+      <td class="dir num">${fNum(v.litros)}</td><td class="dir">${v.media ? chipVsMedia(v.media, medFrota, false, x => fNum(x, 2)) : `<span class="chip neutro" title="O relatório trouxe: ${esc(String(v.mediaInformada ?? '-'))}">—</span>`}</td>
+      <td class="dir num">${fNum(v.ultimoKm)}</td><td class="dir num"><b>${brl(v.valor)}</b></td></tr>`).join('')}</tbody>`;
+    $$('#mesTabela th').forEach(th => th.addEventListener('click', () => { const c = th.dataset.c; ordemMes.dir = ordemMes.col === c ? -ordemMes.dir : (['placa', 'unidade', 'modelo'].includes(c) ? 1 : -1); ordemMes.col = c; renderMes(); }));
+  }
+  const pad2 = n => String(n).padStart(2, '0');
+
   // ---------- gravação segura ----------
   async function alterar(mudanca, mensagem) {
     if (!st.podeEditar) { toast(st.servidor ? 'Somente visualização: alterações só no computador do responsável.' : 'Somente visualização.'); return false; }
@@ -715,7 +829,7 @@
         const buf = await f.arrayBuffer();
         const r = await D.lerArquivo(f.name, buf);
         const copia = await D.guardarArquivo(f.name, buf);
-        lidos.push({ nome: f.name, tipo: r.tipo, formato: r.formato, registros: r.registros, copia });
+        lidos.push({ nome: f.name, tipo: r.tipo, formato: r.formato, registros: r.registros, mes: r.mes, periodo: r.periodo, copia });
       } catch (e) { lidos.push({ nome: f.name, erro: e.message }); }
     }
     const validos = lidos.filter(l => !l.erro);
@@ -723,7 +837,17 @@
     if (validos.length) {
       const ok = await alterar(base => {
         for (const l of validos) {
-          const m = D.mesclar(base, l.tipo, l.registros);
+          let m;
+          if (l.tipo === 'resumoPostos' || l.tipo === 'resumoVeiculos') {
+            // relatório mensal: guarda à parte, um por mês; importar de novo o mesmo mês substitui (a versão antiga fica no git)
+            const chave = l.tipo === 'resumoPostos' ? 'postos' : 'veiculos';
+            base.resumos = base.resumos || { postos: {}, veiculos: {} };
+            base.resumos[chave] = base.resumos[chave] || {};
+            const existia = !!base.resumos[chave][l.mes];
+            base.resumos[chave][l.mes] = { arquivo: l.nome, importado: new Date().toISOString(), periodo: l.periodo || null, linhas: l.registros };
+            m = { novos: existia ? 0 : l.registros.length, atualizados: existia ? l.registros.length : 0, iguais: 0 };
+            st.mesAba = l.mes;
+          } else m = D.mesclar(base, l.tipo, l.registros);
           Object.assign(l, m);
           base.importacoes.push({ quando: new Date().toISOString(), arquivo: l.nome, tipo: l.tipo, lidos: l.registros.length, novos: m.novos, atualizados: m.atualizados, copia: l.copia });
         }
@@ -852,6 +976,7 @@
     renderAjustes();
     renderAjusteMapa();
     if ($('#tela-apresentacao').classList.contains('ativa')) renderApresentacao();
+    if ($('#tela-mes').classList.contains('ativa')) renderMes();
   }
 
   function ligar() {
@@ -862,7 +987,11 @@
       if (b.dataset.tela === 'painel') renderPainel();
       if (b.dataset.tela === 'apresentacao') renderApresentacao();
       if (b.dataset.tela === 'ajustes') renderAjusteMapa();
+      if (b.dataset.tela === 'mes') renderMes();
     }));
+    // mês
+    $('#mesSel').addEventListener('change', e => { st.mesAba = e.target.value; st.mesUnid = ''; renderMes(); });
+    $('#mesUnid').addEventListener('change', e => { st.mesUnid = e.target.value; renderMes(); });
     // semana no painel
     $('#semAnt').addEventListener('click', () => { st.filtro.semOff--; st.sel.periodo.clear(); renderPainel(); });
     $('#semProx').addEventListener('click', () => { if (st.filtro.semOff < 0) { st.filtro.semOff++; st.sel.periodo.clear(); renderPainel(); } });
@@ -936,6 +1065,7 @@
       renderPainel();
       renderAjusteMapa();
       if ($('#tela-apresentacao').classList.contains('ativa')) renderApresentacao();
+      if ($('#tela-mes').classList.contains('ativa')) renderMes();
     });
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => renderPainel());
   }

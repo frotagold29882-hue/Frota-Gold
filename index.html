@@ -19,6 +19,7 @@
     </div>
     <nav class="abas" id="abas">
       <button class="aba ativa" data-tela="painel">Painel</button>
+      <button class="aba" data-tela="mes">Mês</button>
       <button class="aba" data-tela="importar">Importar</button>
       <button class="aba" data-tela="dados">Dados</button>
       <button class="aba" data-tela="apresentacao">Apresentação</button>
@@ -180,6 +181,37 @@
     </div>
     <p class="contador" style="margin:-4px 0 10px">Respeita todos os filtros e seleções do Painel.</p>
     <div class="cartao"><div class="tabela-wrap"><table id="tabDados"></table></div></div>
+  </section>
+
+  <!-- ================= MÊS (relatórios mensais do TruckPag) ================= -->
+  <section class="tela" id="tela-mes">
+    <div class="apr-barra">
+      <label class="campo">Mês <select id="mesSel"></select></label>
+      <label class="campo">Unidade <select id="mesUnid"><option value="">Todas</option></select></label>
+      <span class="contador" id="mesFontes"></span>
+    </div>
+    <div id="mesVazio" class="cartao" hidden>
+      <h3>Nenhum relatório mensal ainda</h3>
+      <p class="sub">Na aba Importar, arraste o <b>Consolidado do mês</b> (por posto) e a <b>Média do mês</b> (por veículo) exportados do TruckPag. Coloque o mês no nome do arquivo, ex.: "Consolidado Out.xlsx".</p>
+    </div>
+    <div id="mesConteudo">
+      <div class="kpis" id="mesKpis"></div>
+      <div class="grade g-mapa">
+        <div class="cartao"><h3>Maiores gastos por veículo</h3><p class="sub" id="mesVeicSub">Relatório de médias do mês · toque numa unidade para filtrar</p><div class="barras" id="mesVeic"></div></div>
+        <div class="cartao"><h3>Gasto por unidade</h3><p class="sub">Pelo centro de custo do relatório de médias · toque para filtrar</p><div class="barras" id="mesUnidades"></div></div>
+      </div>
+      <div class="grade g-mapa">
+        <div class="cartao"><h3>Onde o dinheiro foi gasto</h3><p class="sub">Estados pelo consolidado por posto · bolhas = gasto de cada unidade</p><div class="mapa" id="mesMapa"></div></div>
+        <div class="cartao"><h3>Maiores gastos por posto</h3><p class="sub">Consolidado do mês (diesel + Arla)</p><div class="barras" id="mesPostos"></div></div>
+      </div>
+      <div class="grade g2">
+        <div class="cartao"><h3>Diesel mais caro por posto</h3><p class="sub">Preço médio do litro no mês</p><div class="tabela-wrap"><table id="mesPrecos"></table></div></div>
+        <div class="cartao"><h3>Conferência do mês</h3><p class="sub">Relatórios mensais × lançamentos importados no painel</p><div id="mesConf"></div></div>
+      </div>
+      <div class="grade">
+        <div class="cartao"><h3>Todos os veículos do mês</h3><p class="sub">Clique no título da coluna para ordenar</p><div class="tabela-wrap tabela-alta"><table id="mesTabela"></table></div></div>
+      </div>
+    </div>
   </section>
 
   <!-- ================= APRESENTAÇÃO ================= -->

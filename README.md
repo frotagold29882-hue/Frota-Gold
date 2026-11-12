@@ -72,6 +72,14 @@ Visuais:
 - **Pontos de atenção**, com correção ali mesmo: placas sem unidade, multas sem estado, hodômetro inválido e diesel caro.
 - **Dados:** tabelas com busca e exportação para Excel (CSV).
 
+## Aba Mês (relatórios mensais do TruckPag)
+
+- Importe o **Consolidado do mês** (por posto) e a **Média do mês** (por veículo). Coloque o mês no nome do arquivo (ex.: "Consolidado Out.xlsx").
+- Eles ficam guardados à parte, um por mês, sem somar com os lançamentos (para não contar em dobro). Importar de novo o mesmo mês substitui; a versão anterior fica no git.
+- A aba mostra os maiores gastos por veículo, unidade, posto e estado, o diesel mais caro por posto e uma conferência entre os relatórios e os lançamentos do painel (com os dias que faltam).
+- O centro de custo da Média também dá unidade às placas que não estão no cadastro.
+- Consolidado por posto de poucos dias (semanal) é recusado: para semanas, use a fatura (CSV).
+
 ## Apresentação semanal e TV
 
 - Aba **Apresentação**: 6 telas da semana (segunda a domingo) comparadas com a semana anterior: resumo, mapa, eficiência por unidade, postos e preços, veículos e motoristas, pontos de atenção.

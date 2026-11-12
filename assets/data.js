@@ -243,6 +243,73 @@
     return false;
   }
 
+  // ---------- relatórios MENSAIS do TruckPag (ficam à parte dos lançamentos, para não somar em dobro) ----------
+  const MESES = { JAN: 1, FEV: 2, MAR: 3, ABR: 4, MAI: 5, JUN: 6, JUL: 7, AGO: 8, SET: 9, OUT: 10, NOV: 11, DEZ: 12 };
+  /** Mês pelo nome do arquivo ("Consolidado Out.xlsx", "Média Outubro 2026.xlsx"). */
+  function mesDoNome(nome) {
+    const n = chaveTexto(nome);
+    const m = n.match(/(?:^|[^A-Z])(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)[A-Z]*(?:[^A-Z]|$)/);
+    if (!m) return '';
+    const mes = MESES[m[1]];
+    const anoNome = (n.match(/(20\d{2})/) || [])[1];
+    const hoje = new Date();
+    const ano = anoNome ? +anoNome : (mes > hoje.getMonth() + 1 ? hoje.getFullYear() - 1 : hoje.getFullYear());
+    return `${ano}-${pad(mes)}`;
+  }
+  const pareceSemanal = nome => /\d{1,2}\s*(a|ate|-)\s*\d{1,2}/i.test(semAcento(nome)) && !/20\d{2}\s*-\s*\d{2}/.test(nome);
+
+  function lerResumoPostos(nome, wb) {
+    for (const aba of wb.SheetNames) {
+      const rows = linhas(wb.Sheets[aba]);
+      const h = acharCabecalho(rows, ['POSTO', 'TRANSACOES', 'LITRAGEM']);
+      if (!h || !h.cab.includes('PRECO MEDIO') || h.cab.includes('PLACA')) continue;
+      const c = h.cab, C = { posto: col(c, 'Posto'), cidade: col(c, 'Cidade'), uf: col(c, 'UF'), tr: col(c, 'Transacoes'), comb: col(c, 'Combustivel'),
+        litros: col(c, 'Litragem'), valor: col(c, 'Valor'), preco: col(c, 'Preco medio'), dt: col(c, 'Data do ultimo preco transacionado', 'Dt do Abastecimento') };
+      const out = [];
+      for (const r of rows.slice(h.i + 1)) {
+        const posto = String(pega(r, C.posto) ?? '').trim();
+        if (!posto || /^TOTA/i.test(posto)) continue;
+        const comb = chaveTexto(pega(r, C.comb));
+        out.push({ posto, cidade: chaveTexto(pega(r, C.cidade)), uf: ufDeTexto(pega(r, C.uf)) || chaveTexto(pega(r, C.uf)), transacoes: num(pega(r, C.tr)) || 0,
+          combustivel: comb.includes('ARLA') ? 'ARLA' : comb.includes('DIESEL') ? 'DIESEL' : (comb || 'OUTRO'), litros: num(pega(r, C.litros)) || 0,
+          valor: num(pega(r, C.valor)) || 0, preco: num(pega(r, C.preco)), ultimaData: data(pega(r, C.dt)) });
+      }
+      const datas = out.map(o => o.ultimaData).filter(Boolean).sort();
+      const dias = datas.length ? (new Date(datas.at(-1)) - new Date(datas[0])) / 864e5 : 0;
+      if (pareceSemanal(nome) || dias < 15)
+        throw new Error(`Este consolidado por posto parece ser de poucos dias (${datas.length ? dBRcurto(datas[0]) + ' a ' + dBRcurto(datas.at(-1)) : 'sem datas'}). O painel guarda só o consolidado do MÊS inteiro; para as semanas, use a fatura do TruckPag (CSV).`);
+      const cont = {}; for (const d of datas) cont[d.slice(0, 7)] = (cont[d.slice(0, 7)] || 0) + 1;
+      const mes = mesDoNome(nome) || Object.entries(cont).sort((a, b) => b[1] - a[1])[0][0];
+      return { mes, registros: out, periodo: [datas[0], datas.at(-1)] };
+    }
+    return null;
+  }
+
+  function lerResumoVeiculos(nome, wb) {
+    for (const aba of wb.SheetNames) {
+      const rows = linhas(wb.Sheets[aba]);
+      const h = acharCabecalho(rows, ['PLACA', 'LITRAGEM', 'VALOR TOTAL']);
+      if (!h || !(h.cab.includes('MEDIA') || h.cab.includes('CENTRO DE CUSTO'))) continue;
+      const c = h.cab, C = { placa: col(c, 'Placa'), frota: col(c, 'Numero da frota'), centro: col(c, 'Centro de custo'), marca: col(c, 'Marca'), modelo: col(c, 'Modelo'),
+        km: col(c, 'Ultimo KM'), litros: col(c, 'Litragem'), media: col(c, 'Media'), valor: col(c, 'Valor Total') };
+      const out = [];
+      for (const r of rows.slice(h.i + 1)) {
+        const placa = normPlaca(pega(r, C.placa));
+        if (!placa || placa.length < 6) continue;
+        const centro = String(pega(r, C.centro) ?? '').trim();
+        const media = num(pega(r, C.media));
+        out.push({ placa, frota: String(pega(r, C.frota) ?? '').trim(), unidade: /^null$/i.test(centro) || !centro ? '' : normUnidade(centro),
+          marca: String(pega(r, C.marca) ?? '').trim(), modelo: String(pega(r, C.modelo) ?? '').trim(), ultimoKm: num(pega(r, C.km)),
+          litros: num(pega(r, C.litros)) || 0, media: media > 0 && media < 15 ? media : null, mediaInformada: media, valor: num(pega(r, C.valor)) || 0 });
+      }
+      const mes = mesDoNome(nome);
+      if (!mes) throw new Error('Não consegui saber o mês deste relatório de médias. Coloque o mês no nome do arquivo (ex.: "Média Out.xlsx").');
+      return { mes, registros: out };
+    }
+    return null;
+  }
+  const dBRcurto = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+
   /** PDF "Detalhes da Infração" (consulta de infrações do governo federal). O PDF precisa ter texto, não imagem. */
   async function lerMultaPDF(nome, buffer) {
     if (!window.pdfjsLib) throw new Error('Leitor de PDF não carregou (sem internet?).');
@@ -298,7 +365,8 @@
     if ((r = lerAbastecimentos(wb))) return { tipo: 'abastecimentos', registros: r, formato: 'Listagem de abastecimentos' };
     if ((r = lerMultas(wb))) return { tipo: 'multas', registros: r, formato: 'Multas' };
     if ((r = lerFrota(wb))) return { tipo: 'frota', registros: r, formato: 'Cadastro da frota' };
-    if (ehConsolidadoPorPosto(wb)) throw new Error('É um relatório consolidado POR POSTO: não tem placa, motorista nem km, então não dá para separar por unidade nem calcular R$/km. Não foi importado. Use a fatura do TruckPag (CSV) ou a listagem de abastecimentos.');
+    if ((r = lerResumoVeiculos(nome, wb))) return { tipo: 'resumoVeiculos', mes: r.mes, registros: r.registros, formato: `Média por veículo do mês (${r.mes.slice(5)}/${r.mes.slice(0, 4)})` };
+    if ((r = lerResumoPostos(nome, wb))) return { tipo: 'resumoPostos', mes: r.mes, periodo: r.periodo, registros: r.registros, formato: `Consolidado por posto do mês (${r.mes.slice(5)}/${r.mes.slice(0, 4)})` };
     throw new Error(`Não reconheci o arquivo "${nome}". Esperado: fatura do TruckPag (CSV), listagem de abastecimentos, planilha de multas ou cadastro da frota.`);
   }
 
@@ -309,7 +377,8 @@
       versao: VERSAO,
       abastecimentos: [], multas: [], frota: [],
       ajustes: { kmMax: 3000, unidadePorPlaca: {}, ufPorMulta: {}, localUF: {}, localUnidade: {} },
-      importacoes: []
+      importacoes: [],
+      resumos: { postos: {}, veiculos: {} } // relatórios mensais do TruckPag, por mês (AAAA-MM)
     };
   }
 
@@ -352,7 +421,13 @@
   function contexto(base) {
     const frota = new Map(base.frota.map(f => [f.placa, f]));
     const aj = base.ajustes;
-    const unidadePlaca = p => normUnidade(aj.unidadePorPlaca[p] || frota.get(p)?.unidade || '');
+    // centro de custo dos relatórios mensais de média: só vale quando a placa não tem unidade no ajuste nem no cadastro
+    const centroCusto = new Map();
+    for (const mes of Object.keys(base.resumos?.veiculos || {}).sort()) for (const v of base.resumos.veiculos[mes].linhas || []) if (v.unidade) centroCusto.set(v.placa, v.unidade);
+    const unidadePlaca = p => {
+      const doCadastro = normUnidade(aj.unidadePorPlaca[p] || frota.get(p)?.unidade || '');
+      return doCadastro !== SEM_UNIDADE ? doCadastro : normUnidade(centroCusto.get(p) || '');
+    };
     const locais = [...Object.entries(aj.localUF || {}).map(([t, u]) => [chaveTexto(t), u]), ...LOCAIS_PADRAO];
 
     function ufMulta(m) {
