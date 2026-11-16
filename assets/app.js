@@ -1091,6 +1091,7 @@
   function mostrarGit(g) {
     const s = $('#seloGit');
     const set = (cls, txt, tit) => { s.className = 'selo ' + cls; s.lastElementChild.textContent = txt; s.title = tit || txt; };
+    if (st.site) return set('ok', 'Atualizado em ' + (st.base.resumo?.atualizado ? new Date(st.base.resumo.atualizado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'), 'Somente visualização. Os dados são atualizados a partir do computador do responsável.');
     if (st.embutida) return set('ok', 'Somente visualização', 'Arquivo gerado em ' + new Date(window.GERADO_EM || Date.now()).toLocaleString('pt-BR') + '. Os dados não podem ser alterados aqui.');
     if (st.servidor && !st.podeEditar) return set('alerta', 'Somente visualização', 'Alterações só podem ser feitas no computador do responsável pelo painel.');
     if (!st.servidor) return set('erro', 'Sem servidor', 'Abra pelo "Abrir Painel.bat" para gravar dados');
@@ -1230,7 +1231,8 @@
     const { base, origem } = await D.carregar();
     st.base = base;
     st.servidor = origem === 'servidor';
-    st.embutida = origem === 'embutida';
+    st.embutida = origem === 'embutida' || origem === 'site';
+    st.site = origem === 'site';
     // só edita quem está no computador do servidor; arquivo exportado e acesso pela rede só visualizam
     st.podeEditar = st.servidor ? ((await D.statusGit()) || {}).podeEditar !== false : false;
     document.body.classList.toggle('so-leitura', !st.podeEditar);

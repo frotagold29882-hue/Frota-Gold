@@ -11,3 +11,6 @@ dados/.backups/
 Thumbs.db
 desktop.ini
 .claude/
+
+# pasta gerada para a Cloudflare
+/site/

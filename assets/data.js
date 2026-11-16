@@ -585,6 +585,11 @@
       const r = await fetch('api/base', { cache: 'no-store' });
       if (r.ok) { const b = garantir(await r.json()); salvarCache(b); return { base: b, origem: 'servidor' }; }
     } catch (e) { /* sem servidor */ }
+    // site publicado (Cloudflare): sem servidor, lê a base consolidada como arquivo
+    try {
+      const r = await fetch('dados/base.json', { cache: 'no-store' });
+      if (r.ok && (r.headers.get('content-type') || '').includes('json')) return { base: garantir(await r.json()), origem: 'site' };
+    } catch (e) { /* não é o site */ }
     try { const c = localStorage.getItem(CACHE); if (c) return { base: garantir(JSON.parse(c)), origem: 'cache' }; } catch (e) {}
     return { base: baseVazia(), origem: 'vazio' };
   }

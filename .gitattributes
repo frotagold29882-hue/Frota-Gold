@@ -4,3 +4,4 @@
 *.xlsx binary
 *.xls binary
 dados/base.json text eol=lf
+publicar-site.sh text eol=lf
